@@ -29,3 +29,6 @@ models/*
 
 # Agent-local settings (per-machine permission allowlists)
 .claude/settings.local.json
+
+# Package build output (make build)
+/dist/
