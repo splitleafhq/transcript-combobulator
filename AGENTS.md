@@ -94,6 +94,7 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make check-sample` | Transcribe the AMI sample; print WER against `samples/ami/EN2002b-human.txt` (no gate); fail if any word differs from `samples/ami/EN2002b-reference.txt` |
 | `make test-fast` | pytest without the `slow` (real inference) tests |
 | `make test` | Whole suite; never touches `tmp/output` |
+| `make build` | `python -m build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
 | `make format` | `ruff format` |
 | `make typecheck` | `mypy --strict` |
@@ -415,7 +416,7 @@ fails loudly.
    extend one that already covers it. Use synthetic fixtures where possible, and
    the slow whisper tests only when testing whisper behavior.
 6. Run `make lint`, `make typecheck` and `make test` before declaring done.
-   `lefthook install` runs `make lint typecheck test-fast` before every push (`lefthook.yml`).
+   `lefthook install` runs `make lint typecheck test-fast build` before every push (`lefthook.yml`).
 
 ## Common Pitfalls
 

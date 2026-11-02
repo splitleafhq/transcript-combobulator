@@ -1,5 +1,5 @@
 .PHONY: help check-deps setup install setup-whisper run run-single \
-        combine-transcripts filter-vtt session-env compare-transcripts create-sample-files sample-ami check-sample test test-fast lint format typecheck lint-pyrefly \
+        combine-transcripts filter-vtt session-env compare-transcripts create-sample-files sample-ami check-sample test test-fast build lint format typecheck lint-pyrefly \
         clean-output clean-tmp
 
 ROOT_DIR := $(shell pwd)
@@ -132,6 +132,9 @@ test: ## Run the whole suite, including real whisper/VAD inference
 
 test-fast: ## Run the suite without the slow inference tests
 	$(VENV_CMD) python -m pytest tests/ -v -m "not slow"
+
+build: ## Build the sdist and wheel into dist/, as CI does
+	$(VENV_CMD) python -m build
 
 lint: ## Run ruff check and ruff format --check
 	$(VENV_CMD) ruff check --output-format concise . && ruff format --check .
