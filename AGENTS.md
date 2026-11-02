@@ -335,7 +335,7 @@ fails loudly.
   Pi with `large-v3-turbo` lands on 1 worker. `TORCH_THREADS=0` auto-splits
   threads across the active workers.
 - mlx-whisper is pinned in the `mac` extra (`mlx-whisper==0.4.3`; `pip check`
-  is clean next to `torch==2.11.0`). `whisper_mlx.py` relies on its
+  is clean next to `torch==2.14.1`). `whisper_mlx.py` relies on its
   `ModelHolder`, so a bump must keep `tests/test_whisper_runtime.py` green and
   rerun the slow mlx test.
 - `transcript_combobulator.whisper.load_whisper_model` loads by file path on purpose. Loading by
@@ -373,9 +373,10 @@ fails loudly.
 
 ## Dependencies (gotchas)
 
-- `torch` and `torchaudio` are an exact pair; torchaudio's wheel declares no
-  dependencies so pip will not enforce it. torchaudio 2.11.0 is the final
-  maintenance line and caps torch. `torchaudio` must stay importable for
+- torchaudio 2.11.0 is built against PyTorch's stable ABI and runs with torch
+  2.11 and later (see its installation docs' compatibility matrix), so it does
+  not cap torch. Its wheel declares no dependencies, so pip does not check the
+  pairing. `torchaudio` must stay importable for
   `silero-vad`, but nothing calls its I/O: audio goes through `soundfile` and
   `ffmpeg`, so `torchcodec` (ABI-locked to torch, no aarch64 wheel before
   0.11) is deliberately not a dependency. Do not reintroduce

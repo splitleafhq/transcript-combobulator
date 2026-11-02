@@ -9,10 +9,11 @@ keywords = []
 authors = [
     { name = "Sean Kennedy", email = "sean@codeserious.com" }
 ]
-# torch and torchaudio are an exact pair (torchaudio's wheel declares no
-# dependencies, so pip will not enforce it). torchaudio 2.11.0 is its final
-# maintenance line, which caps torch. Nothing here calls torchaudio I/O, so
-# torchcodec (ABI-locked to torch, no aarch64 wheel before 0.11) is not needed.
+# torchaudio 2.11.0 is built against PyTorch's stable ABI and runs with torch
+# 2.11 and later (https://pytorch.org/audio/main/installation.html#compatibility-matrix),
+# so torch is not capped by it. Its wheel declares no dependencies, so pip does
+# not check the pairing. Nothing here calls torchaudio I/O, so torchcodec
+# (ABI-locked to torch, no aarch64 wheel before 0.11) is not needed.
 dependencies = [
     "openai-whisper==20250625",
     "python-dotenv==1.2.4",
