@@ -136,6 +136,7 @@ make check-sample                       # Transcribe the 4-speaker AMI sample; p
 make lint                               # ruff check and format check
 make format                             # ruff format
 make typecheck                          # mypy --strict
+lefthook install                        # Run lint, typecheck and test-fast before every push
 make clean-output                       # Delete every session's outputs under tmp/output
 ```
 

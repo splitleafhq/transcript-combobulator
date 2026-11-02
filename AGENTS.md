@@ -415,6 +415,7 @@ fails loudly.
    extend one that already covers it. Use synthetic fixtures where possible, and
    the slow whisper tests only when testing whisper behavior.
 6. Run `make lint`, `make typecheck` and `make test` before declaring done.
+   `lefthook install` runs `make lint typecheck test-fast` before every push (`lefthook.yml`).
 
 ## Common Pitfalls
 
