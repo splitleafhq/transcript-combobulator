@@ -416,7 +416,7 @@ fails loudly.
    extend one that already covers it. Use synthetic fixtures where possible, and
    the slow whisper tests only when testing whisper behavior.
 6. Run `make lint`, `make typecheck` and `make test` before declaring done.
-   `lefthook install` runs `make lint typecheck test-fast build` before every push (`lefthook.yml`).
+   `scripts/check` runs CI's steps (ruff, mypy, fast tests, build) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
 
 ## Common Pitfalls
 

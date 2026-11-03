@@ -137,7 +137,8 @@ make lint                               # ruff check and format check
 make format                             # ruff format
 make typecheck                          # mypy --strict
 make build                              # sdist and wheel into dist/, as CI does
-lefthook install                        # Run lint, typecheck, test-fast and build before every push
+scripts/check                           # CI's checks: ruff, mypy, fast tests, build; fails on a missing or stale .venv
+git config core.hooksPath .githooks     # Once per clone: run scripts/check before every push
 make clean-output                       # Delete every session's outputs under tmp/output
 ```
 
