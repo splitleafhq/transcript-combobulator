@@ -127,11 +127,14 @@ check-sample: sample-ami ## Transcribe the AMI sample and fail if it differs fro
 	$(VENV_CMD) ENV_FILE="$$env_file" combobulator compare --ref samples/ami/EN2002b-reference.txt \
 		--hyp tmp/output/ami-en2002b/ami-en2002b-combined.txt --strict
 
-test: ## Run the whole suite, including real whisper/VAD inference
-	$(VENV_CMD) python -m pytest tests/ -v
+test: ## Run the suite scripts/check runs, including real whisper/VAD inference
+	$(VENV_CMD) python -m pytest tests/ -v -m "not mlx"
+
+test-mlx: ## Run the opt-in MLX inference test (needs the mlx checkpoint)
+	$(VENV_CMD) python -m pytest tests/ -v -m mlx
 
 test-fast: ## Run the suite without the slow inference tests
-	$(VENV_CMD) python -m pytest tests/ -v -m "not slow"
+	$(VENV_CMD) python -m pytest tests/ -v -m "not slow and not mlx"
 
 build: ## Build the sdist and wheel into dist/, as CI does
 	$(VENV_CMD) python -m build

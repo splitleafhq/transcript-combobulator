@@ -93,7 +93,8 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make sample-ami` | Fetch the 4-speaker AMI sample into `tmp/input/ami-en2002b/` (network, checksum-verified) |
 | `make check-sample` | Transcribe the AMI sample; print WER against `samples/ami/EN2002b-human.txt` (no gate); fail if any word differs from `samples/ami/EN2002b-reference.txt` |
 | `make test-fast` | pytest without the `slow` (real inference) tests |
-| `make test` | Whole suite; never touches `tmp/output` |
+| `make test` | The suite `scripts/check` runs, real inference included; never touches `tmp/output` |
+| `make test-mlx` | Opt-in MLX inference test; needs `mlx_whisper` and the mlx checkpoint |
 | `make build` | `python -m build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
 | `make format` | `ruff format` |
@@ -363,8 +364,9 @@ fails loudly.
   change.
 - `tests/test_combine.py` is fast (pure Python over synthetic VTTs).
 - `tests/test_vad.py`, `tests/test_transcription.py`, `tests/test_whisper.py`
-  are marked `slow` (real inference). `make test-fast` skips them; run
-  `make test` when changing the audio pipeline.
+  are marked `slow` (real inference, about 20 s). `scripts/check` and `make test`
+  run them; CI and `make test-fast` skip them (no models there). The MLX test is
+  marked `mlx` and runs only with `make test-mlx`.
 - `make test` never cleans `tmp/output`. Slow tests write under
   `tmp/output/test_jfk*/`; `make clean-output` removes everything.
 - Whisper segment count is nondeterministic — use range assertions, not exact
