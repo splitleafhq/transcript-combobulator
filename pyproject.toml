@@ -17,11 +17,11 @@ dependencies = [
     "openai-whisper==20250625",
     "python-dotenv==1.2.4",
     "soundfile==0.14.0",
-    "torch==2.14.1",
-    "torchaudio==2.11.0",
+    "torch==2.15.0",
+    "torchaudio==2.11.1",
     "silero-vad==6.2.3",
     # silero-vad does not declare onnxruntime; its ONNX build needs it.
-    "onnxruntime==1.31.0",
+    "onnxruntime==1.31.1",
     "rich==15.0.0",
     # compare --wer: substitutions, deletions and insertions from a word alignment.
     "jiwer==4.0.0",
@@ -39,10 +39,10 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "build==1.6.1",
-    "mypy==2.4.0",
+    "mypy==2.4.1",
     "pyrefly==1.4.0",
-    "pytest==9.1.1",
-    "ruff==0.17.2",
+    "pytest==9.2.0",
+    "ruff==0.17.3",
 ]
 # Apple Silicon only; used when WHISPER_RUNTIME=mlx (the Apple GPU instead of the CPU).
 mac = [
