@@ -131,7 +131,8 @@ make compare-transcripts ref="old-1.txt old-2.txt" hyp="new-1.txt new-2.txt"  # 
 
 # Dev
 make test-fast                          # Suite without real inference (seconds)
-make test                               # Whole suite (minutes)
+make test                               # Suite scripts/check runs, real inference included (about 20 s)
+make test-mlx                           # Opt-in MLX inference test (needs the mlx checkpoint)
 make check-sample                       # Transcribe the 4-speaker AMI sample; print WER against AMI's human transcript; fail if any word changed (samples/ami/NOTICE.md)
 make lint                               # ruff check and format check
 make format                             # ruff format

@@ -93,7 +93,8 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make sample-ami` | Fetch the 4-speaker AMI sample into `tmp/input/ami-en2002b/` (network, checksum-verified) |
 | `make check-sample` | Transcribe the AMI sample; print WER against `samples/ami/EN2002b-human.txt` (no gate); fail if any word differs from `samples/ami/EN2002b-reference.txt` |
 | `make test-fast` | pytest without the `slow` (real inference) tests |
-| `make test` | Whole suite; never touches `tmp/output` |
+| `make test` | The suite `scripts/check` runs, real inference included; never touches `tmp/output` |
+| `make test-mlx` | Opt-in MLX inference test; needs `mlx_whisper` and the mlx checkpoint |
 | `make build` | `python -m build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
 | `make format` | `ruff format` |
@@ -363,8 +364,9 @@ fails loudly.
   change.
 - `tests/test_combine.py` is fast (pure Python over synthetic VTTs).
 - `tests/test_vad.py`, `tests/test_transcription.py`, `tests/test_whisper.py`
-  are marked `slow` (real inference). `make test-fast` skips them; run
-  `make test` when changing the audio pipeline.
+  are marked `slow` (real inference, about 20 s). `scripts/check` and `make test`
+  run them; CI and `make test-fast` skip them (no models there). The MLX test is
+  marked `mlx` and runs only with `make test-mlx`.
 - `make test` never cleans `tmp/output`. Slow tests write under
   `tmp/output/test_jfk*/`; `make clean-output` removes everything.
 - Whisper segment count is nondeterministic — use range assertions, not exact
@@ -416,7 +418,7 @@ fails loudly.
    extend one that already covers it. Use synthetic fixtures where possible, and
    the slow whisper tests only when testing whisper behavior.
 6. Run `make lint`, `make typecheck` and `make test` before declaring done.
-   `scripts/check` runs CI's steps (ruff, mypy, fast tests, build) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
+   `scripts/check` runs CI's steps (ruff, mypy, tests, build) plus the slow real-inference tests CI can't run (it has no models) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
 
 ## Common Pitfalls
 

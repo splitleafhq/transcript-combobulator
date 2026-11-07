@@ -72,7 +72,8 @@ python_files = ["test_*.py"]
 addopts = "-v"
 pythonpath = ["."]
 markers = [
-    "slow: real whisper or VAD inference; needs models/ and minutes of CPU",
+    "slow: real whisper or VAD inference; needs models/ (about 20 s on Apple Silicon)",
+    "mlx: real MLX inference; needs mlx_whisper and the mlx checkpoint, opt-in: make test-mlx",
 ]
 
 [tool.mypy]
