@@ -18,6 +18,7 @@ from transcript_combobulator.config import (
     SKIP_FILTERS,
 )
 from transcript_combobulator.logging_config import get_logger
+from transcript_combobulator.pipeline_cache import is_vtt_unfinished
 
 logger = get_logger(__name__)
 
@@ -324,7 +325,8 @@ def combine_transcripts_from_env(
     ``vtt_files`` restricts the combine to exactly those transcripts. Batch
     runs pass the VTTs they produced so a stale per-speaker directory from an
     earlier export cannot double a speaker's lines. Without it every VTT
-    under the session directory is used, in sorted order.
+    under the session directory is used, in sorted order, and none may be
+    left by a run that failed or was interrupted (``is_vtt_unfinished``).
     """
     search_dir = base_dir / session_subdir if session_subdir else base_dir
     output_dir = search_dir
@@ -336,6 +338,14 @@ def combine_transcripts_from_env(
             raise CombineError(f"Transcript files not found: {missing}")
     else:
         vtt_files = sorted(search_dir.glob("**/*.vtt"))
+        # whisper writes the VTT even when some chunks failed; only a
+        # finished run records it, so anything else may have gaps.
+        incomplete = [str(p) for p in vtt_files if is_vtt_unfinished(p)]
+        if incomplete:
+            raise CombineError(
+                f"Transcripts not recorded complete: {incomplete}. A run failed "
+                "or was interrupted on these tracks; rerun it to finish them."
+            )
     if not vtt_files:
         raise CombineError(f"No VTT files found in {search_dir}")
 
