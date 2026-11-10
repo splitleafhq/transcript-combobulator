@@ -29,7 +29,7 @@ transcript_combobulator/
 └── logging_config.py   # setup_logging / file handlers
 ```
 
-`pip install -e .` installs the `combobulator` console script; the Makefile
+`make install` (`uv sync --locked`) installs the `combobulator` console script; the Makefile
 targets are thin wrappers around it. Automation calls the script directly:
 `ENV_FILE=.env.<campaign> combobulator run /path/to/session --session <name>`,
 from any working directory, with no `make` and no `PYTHONPATH`.
@@ -79,9 +79,9 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 
 | Command | Purpose |
 |---------|---------|
-| `make check-deps` | Verify Python 3.11+, `venv` module, and `ffmpeg` on the host |
-| `make setup` | Check deps, create venv from `$(PYTHON)`, `make install`, download whisper model |
-| `make install [EXTRAS=dev,mac]` | `pip install -e ".[EXTRAS]"` into `.venv` |
+| `make check-deps` | Verify `uv` and `ffmpeg` on the host |
+| `make setup` | Check deps, `make install`, download whisper model |
+| `make install [EXTRAS=dev,mac]` | `uv sync --locked` with those extras into `.venv`, from `uv.lock` |
 | `make setup-whisper` | Download `WHISPER_MODEL` into `models/` (checksum-verified, no model load); with `WHISPER_RUNTIME=mlx`, the pinned mlx checkpoint into `models/mlx/<model>/` |
 | `make run folder=path/ [force=1]` | Full parallel pipeline for one session; the only thing automation calls |
 | `make run-single file=path [force=1]` | Convert → VAD → transcribe one file, no combine |
@@ -95,7 +95,7 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make test-fast` | pytest without the `slow` (real inference) tests |
 | `make test` | The suite `scripts/check` runs, real inference included; never touches `tmp/output` |
 | `make test-mlx` | Opt-in MLX inference test; needs `mlx_whisper` and the mlx checkpoint |
-| `make build` | `python -m build` into `dist/`, as CI does |
+| `make build` | `uv build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
 | `make format` | `ruff format` |
 | `make typecheck` | `pyrefly check` |
