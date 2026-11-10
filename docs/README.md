@@ -136,9 +136,9 @@ make test-mlx                           # Opt-in MLX inference test (needs the m
 make check-sample                       # Transcribe the 4-speaker AMI sample; print WER against AMI's human transcript; fail if any word changed (samples/ami/NOTICE.md)
 make lint                               # ruff check and format check
 make format                             # ruff format
-make typecheck                          # mypy --strict
+make typecheck                          # pyrefly check
 make build                              # sdist and wheel into dist/, as CI does
-scripts/check                           # CI's checks: ruff, mypy, fast tests, build; fails on a missing or stale .venv
+scripts/check                           # CI's checks: ruff, pyrefly, fast tests, build; fails on a missing or stale .venv
 git config core.hooksPath .githooks     # Once per clone: run scripts/check before every push
 make clean-output                       # Delete every session's outputs under tmp/output
 ```

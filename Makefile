@@ -1,5 +1,5 @@
 .PHONY: help check-deps setup install setup-whisper run run-single \
-        combine-transcripts filter-vtt session-env compare-transcripts create-sample-files sample-ami check-sample test test-fast build lint format typecheck lint-pyrefly \
+        combine-transcripts filter-vtt session-env compare-transcripts create-sample-files sample-ami check-sample test test-fast build lint format typecheck \
         clean-output clean-tmp
 
 ROOT_DIR := $(shell pwd)
@@ -145,10 +145,7 @@ lint: ## Run ruff check and ruff format --check
 format: ## Format with ruff
 	$(VENV_CMD) ruff format .
 
-typecheck: ## Run mypy (strict)
-	$(VENV_CMD) mypy transcript_combobulator
-
-lint-pyrefly: ## Run pyrefly beside mypy (trial; mypy stays the gate)
+typecheck: ## Run pyrefly
 	$(VENV_CMD) pyrefly check
 
 # ── Cleanup ──
@@ -161,5 +158,5 @@ clean-output: ## Delete tmp/output/* (all session transcripts, metrics, logs)
 clean-tmp: clean-output ## Delete tmp/output/* and tmp/input/* and caches
 	cd $(ROOT_DIR) && find tmp -mindepth 1 -not -name ".gitkeep" -not -path "tmp/output" -not -path "tmp/input" -delete
 	cd $(ROOT_DIR) && mkdir -p tmp/input tmp/output
-	cd $(ROOT_DIR) && rm -rf __pycache__/ */__pycache__/ */*/__pycache__/ .pytest_cache/ .coverage .mypy_cache/
+	cd $(ROOT_DIR) && rm -rf __pycache__/ */__pycache__/ */*/__pycache__/ .pytest_cache/ .coverage
 	echo "Removed everything under tmp/ and local caches"

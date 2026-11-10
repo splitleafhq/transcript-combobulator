@@ -47,7 +47,7 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
       - run: pip install -e ".[dev]"
-      - run: mypy transcript_combobulator
+      - run: pyrefly check
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20

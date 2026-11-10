@@ -39,7 +39,6 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "build==1.6.1",
-    "mypy==2.4.1",
     "pyrefly==1.4.1",
     "pytest==9.2.0",
     "ruff==0.17.4",
@@ -76,18 +75,13 @@ markers = [
     "mlx: real MLX inference; needs mlx_whisper and the mlx checkpoint, opt-in: make test-mlx",
 ]
 
-[tool.mypy]
-# No python_version pin: numpy's stubs use PEP 695 syntax, so checking as 3.11
-# fails to parse them. mypy checks against the venv interpreter instead.
-strict = true
-warn_unreachable = true
-# whisper, silero_vad, torchaudio, and soundfile ship no type information.
-ignore_missing_imports = true
-
 [tool.pyrefly]
 project-includes = ["transcript_combobulator"]
-# Checked beside mypy, which stays the gate (`make lint`). No python_version
-# pin, for the same reason as mypy: it checks against the venv interpreter.
+# No python_version pin: numpy's stubs use PEP 695 syntax, so checking as 3.11
+# fails to parse them. pyrefly checks against the venv interpreter instead.
+# The `mac` extra (mlx, mlx-whisper, and huggingface_hub through them) is not in
+# the dev install, so its imports are untyped here.
+ignore-missing-imports = ["mlx", "mlx.*", "mlx_whisper", "mlx_whisper.*", "huggingface_hub", "huggingface_hub.*"]
 
 # _speech_regions_from_probs is a verbatim port of silero-vad; its int()
 # calls stay so the port can be diffed against upstream.
