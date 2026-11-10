@@ -98,8 +98,7 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make build` | `python -m build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
 | `make format` | `ruff format` |
-| `make typecheck` | `mypy --strict` |
-| `make lint-pyrefly` | pyrefly, on trial beside mypy; not a gate yet |
+| `make typecheck` | `pyrefly check` |
 | `make clean-output` | Delete every session's outputs under `tmp/output` |
 | `make clean-tmp` | Also delete `tmp/input` and local caches |
 
@@ -418,7 +417,7 @@ fails loudly.
    extend one that already covers it. Use synthetic fixtures where possible, and
    the slow whisper tests only when testing whisper behavior.
 6. Run `make lint`, `make typecheck` and `make test` before declaring done.
-   `scripts/check` runs CI's steps (ruff, mypy, tests, build) plus the slow real-inference tests CI can't run (it has no models) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
+   `scripts/check` runs CI's steps (ruff, pyrefly, tests, build) plus the slow real-inference tests CI can't run (it has no models) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
 
 ## Common Pitfalls
 

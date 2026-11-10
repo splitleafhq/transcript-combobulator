@@ -20,7 +20,7 @@ run() {
     status=1
   fi
 }
-# The venv's tools must be the pyproject pins, or a stale mypy or ruff passes what CI fails.
+# The venv's tools must be the pyproject pins, or a stale pyrefly or ruff passes what CI fails.
 pins=$(cat <<'PY'
 import re
 import sys
@@ -52,7 +52,7 @@ fi
 run pins python -I -c "$pins"
 run ruff-check ruff check --output-format concise .
 run ruff-format ruff format --check .
-run mypy mypy transcript_combobulator
+run pyrefly pyrefly check
 # Real whisper and VAD inference included (about 20 s). The mlx test is opt-in: make test-mlx.
 run pytest python -m pytest -q --tb=short --no-header --color=no -m "not mlx"
 run build python -m build
