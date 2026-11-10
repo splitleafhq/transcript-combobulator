@@ -75,6 +75,20 @@ markers = [
     "mlx: real MLX inference; needs mlx_whisper and the mlx checkpoint, opt-in: make test-mlx",
 ]
 
+[tool.uv]
+# `uv sync --locked` installs from uv.lock. Plain `pip install` still works from
+# the pins above, and that is how runewright's transcriber builds the package.
+
+# CPU-only torch on Linux: PyPI's Linux wheels bundle CUDA. macOS uses PyPI.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchaudio = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
 [tool.pyrefly]
 project-includes = ["transcript_combobulator"]
 # No python_version pin: numpy's stubs use PEP 695 syntax, so checking as 3.11

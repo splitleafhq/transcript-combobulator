@@ -1,10 +1,10 @@
 #!/bin/sh
 # Runs what CI runs; prints one line per step and exits nonzero if any step failed.
-# Needs .venv built from pyproject, on the Python in .python-version: python3.14 -m venv .venv && make install
+# Needs .venv built from uv.lock: make install (uv sync --locked --extra dev)
 status=0
 cd "$(git rev-parse --show-toplevel)" || exit 1
 if [ ! -x .venv/bin/python ]; then
-  echo "FAIL venv: .venv is missing; run: python3.14 -m venv .venv && make install (the Python in .python-version)"
+  echo "FAIL venv: .venv is missing; run: make install (uv sync --locked --extra dev)"
   exit 1
 fi
 PATH="$PWD/.venv/bin:$PATH"
@@ -49,6 +49,7 @@ if ! command -v ffmpeg >/dev/null 2>&1; then
   echo "FAIL ffmpeg: not on PATH (brew install ffmpeg)"
   status=1
 fi
+run lock uv lock --check
 run pins python -I -c "$pins"
 run ruff-check ruff check --output-format concise .
 run ruff-format ruff format --check .

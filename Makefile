@@ -4,12 +4,10 @@
 
 ROOT_DIR := $(shell pwd)
 
-# Interpreter used to create the virtualenv. Any CPython >= 3.11 works: the
-# distro python3 on Linux, or Homebrew/pyenv/python.org on macOS. Override with
-# `make setup PYTHON=/path/to/python3.12`.
-PYTHON ?= python3
-# pip extras to install. `mac` adds mlx-whisper on Apple Silicon.
+# Extras to install, comma-separated. `mac` adds mlx-whisper on Apple Silicon.
 EXTRAS ?= dev
+comma := ,
+UV_EXTRAS = $(foreach e,$(subst $(comma), ,$(EXTRAS)),--extra $(e))
 
 # The installed console script; ENV_FILE passes through from the environment.
 VENV_CMD = cd $(ROOT_DIR) && . .venv/bin/activate &&
@@ -25,27 +23,16 @@ help: ## Show this help
 	echo "Per-campaign config: ENV_FILE=.env.<campaign> make run folder=tmp/input/<session>"
 
 # ── Setup ──
-setup: check-deps ## Create .venv from $(PYTHON), install [$(EXTRAS)], download the whisper model
-	cd $(ROOT_DIR) && $(PYTHON) -m venv .venv
-	$(VENV_CMD) pip install --upgrade pip
+setup: check-deps ## Install [$(EXTRAS)] into .venv from uv.lock, download the whisper model
 	$(MAKE) install
 	$(MAKE) setup-whisper
 
 # Verify host prerequisites without touching the venv. Recipes run under
 # /bin/sh, so keep this POSIX (no bashisms like `&>`).
-check-deps: ## Verify Python 3.11+, the venv module, and ffmpeg
-	if ! command -v $(PYTHON) >/dev/null 2>&1; then \
-		echo "$(PYTHON) not found. Install Python 3.11+ (Debian: apt install python3 python3-venv;" \
-		     "macOS: brew install python) or point at one: make setup PYTHON=/path/to/python3"; \
-		exit 1; \
-	fi
-	if ! $(PYTHON) -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then \
-		echo "Python 3.11+ required; $(PYTHON) is $$($(PYTHON) --version 2>&1)." \
-		     "Point at a newer one: make setup PYTHON=/path/to/python3"; \
-		exit 1; \
-	fi
-	if ! $(PYTHON) -c 'import venv, ensurepip' >/dev/null 2>&1; then \
-		echo "The venv module is incomplete for $(PYTHON). Debian/Ubuntu: apt install python3-venv"; \
+check-deps: ## Verify uv and ffmpeg
+	if ! command -v uv >/dev/null 2>&1; then \
+		echo "uv not found; it installs Python and the packages from uv.lock." \
+		     "macOS: brew install uv; Linux: see https://docs.astral.sh/uv/getting-started/installation/"; \
 		exit 1; \
 	fi
 	if ! command -v ffmpeg >/dev/null 2>&1; then \
@@ -53,10 +40,10 @@ check-deps: ## Verify Python 3.11+, the venv module, and ffmpeg
 		     "Debian/Raspberry Pi OS: apt install ffmpeg; macOS: brew install ffmpeg"; \
 		exit 1; \
 	fi
-	echo "Prerequisites OK: $$($(PYTHON) --version 2>&1) at $$(command -v $(PYTHON)); $$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f1-3)"
+	echo "Prerequisites OK: $$(uv --version); $$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f1-3)"
 
-install: ## Install the project into .venv (EXTRAS=dev or EXTRAS=dev,mac)
-	$(VENV_CMD) pip install -e ".[$(EXTRAS)]"
+install: ## Install the project into .venv from uv.lock (EXTRAS=dev or EXTRAS=dev,mac)
+	cd $(ROOT_DIR) && uv sync --locked $(UV_EXTRAS)
 
 setup-whisper: ## Download WHISPER_MODEL into models/ without loading it
 	$(CLI) setup-model
