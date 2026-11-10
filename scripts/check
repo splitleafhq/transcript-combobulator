@@ -56,5 +56,5 @@ run ruff-format ruff format --check .
 run pyrefly pyrefly check
 # Real whisper and VAD inference included (about 20 s). The mlx test is opt-in: make test-mlx.
 run pytest python -m pytest -q --tb=short --no-header --color=no -m "not mlx"
-run build python -m build
+run build uv build
 exit $status

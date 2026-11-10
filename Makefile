@@ -124,7 +124,7 @@ test-fast: ## Run the suite without the slow inference tests
 	$(VENV_CMD) python -m pytest tests/ -v -m "not slow and not mlx"
 
 build: ## Build the sdist and wheel into dist/, as CI does
-	$(VENV_CMD) python -m build
+	cd $(ROOT_DIR) && uv build
 
 lint: ## Run ruff check and ruff format --check
 	$(VENV_CMD) ruff check --output-format concise . && ruff format --check .

@@ -95,7 +95,7 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make test-fast` | pytest without the `slow` (real inference) tests |
 | `make test` | The suite `scripts/check` runs, real inference included; never touches `tmp/output` |
 | `make test-mlx` | Opt-in MLX inference test; needs `mlx_whisper` and the mlx checkpoint |
-| `make build` | `python -m build` into `dist/`, as CI does |
+| `make build` | `uv build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
 | `make format` | `ruff format` |
 | `make typecheck` | `pyrefly check` |
