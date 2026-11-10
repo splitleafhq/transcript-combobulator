@@ -10,18 +10,18 @@ authors = [
     { name = "Sean Kennedy", email = "sean@codeserious.com" }
 ]
 # torch and torchaudio are an exact pair (torchaudio's wheel declares no
-# dependencies, so pip will not enforce it). torchaudio 2.11.0 is its final
-# maintenance line, which caps torch. Nothing here calls torchaudio I/O, so
+# dependencies, so pip will not enforce it). torchaudio 2.11 is its final
+# maintenance line; 2.11.1 declares torch>=2.11. Nothing here calls torchaudio I/O, so
 # torchcodec (ABI-locked to torch, no aarch64 wheel before 0.11) is not needed.
 dependencies = [
     "openai-whisper==20250625",
     "python-dotenv==1.2.4",
     "soundfile==0.14.0",
-    "torch==2.14.1",
-    "torchaudio==2.11.0",
+    "torch==2.15.0",
+    "torchaudio==2.11.1",
     "silero-vad==6.2.3",
     # silero-vad does not declare onnxruntime; its ONNX build needs it.
-    "onnxruntime==1.31.0",
+    "onnxruntime==1.31.1",
     "rich==15.0.0",
     # compare --wer: substitutions, deletions and insertions from a word alignment.
     "jiwer==4.0.0",
@@ -39,10 +39,10 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "build==1.6.1",
-    "mypy==2.4.0",
-    "pyrefly==1.4.0",
-    "pytest==9.1.1",
-    "ruff==0.17.2",
+    "mypy==2.4.1",
+    "pyrefly==1.4.1",
+    "pytest==9.2.0",
+    "ruff==0.17.4",
 ]
 # Apple Silicon only; used when WHISPER_RUNTIME=mlx (the Apple GPU instead of the CPU).
 mac = [
