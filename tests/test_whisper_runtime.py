@@ -3,6 +3,7 @@
 Fast: mlx-whisper is faked, so none of this needs Apple Silicon or a model.
 """
 
+import importlib.util
 import os
 import subprocess
 import sys
@@ -375,13 +376,14 @@ def test_setup_mlx_refuses_a_model_with_no_pinned_checkpoint(tmp_path: Path) -> 
 # ── real inference (slow) ──
 
 
-@pytest.mark.slow
+@pytest.mark.mlx
 def test_mlx_runtime_transcribes_the_jfk_sample() -> None:
-    """End to end on the real checkpoint and the Apple GPU; skipped elsewhere."""
-    pytest.importorskip("mlx_whisper")
+    """End to end on the real checkpoint and the Apple GPU. Opt-in: make test-mlx."""
+    if importlib.util.find_spec("mlx_whisper") is None:
+        pytest.fail("mlx_whisper is not installed: make install EXTRAS=dev,mac")
     checkpoint = config.WHISPER_MODELS_DIR / "mlx" / config.WHISPER_MODEL
     if not (checkpoint / config.MLX_WEIGHTS_FILENAME).is_file():
-        pytest.skip("run `WHISPER_RUNTIME=mlx combobulator setup-model` first")
+        pytest.fail("run `WHISPER_RUNTIME=mlx combobulator setup-model` first")
     code = (
         "from pathlib import Path\n"
         "from transcript_combobulator.whisper import transcribe_segment\n"

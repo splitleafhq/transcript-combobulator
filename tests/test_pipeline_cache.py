@@ -166,6 +166,13 @@ def test_chunk_checkpoint_roundtrip_and_truncation(tmp_path: Path) -> None:
     assert set(loaded) == {1, 2}
     assert loaded[1]["segments"][0]["text"] == "a"
 
+    # the next run's chunks are not lost behind the fragment
+    cp = ChunkCheckpoint(progress, key="k1")
+    cp.record(3, [], {"audio_seconds": 0.5})
+    cp.record(4, [], {"audio_seconds": 0.5})
+    cp.close(remove=False)
+    assert set(load_chunk_checkpoint(progress, "k1")) == {1, 2, 3, 4}
+
     # a different key (settings changed) discards the file
     assert load_chunk_checkpoint(progress, "k2") == {}
     assert not progress.exists()

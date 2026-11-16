@@ -380,6 +380,16 @@ def main(argv: list[str] | None = None) -> None:
         print(f"No audio files found in {target_dir}")
         sys.exit(1)
 
+    # The stem names the output folder, so two inputs sharing one would race on it.
+    stems: dict[str, Path] = {}
+    for f in files:
+        if (other := stems.setdefault(f.stem.casefold(), f)) is not f:
+            print(
+                f"{other.name} and {f.name} share a file stem (ignoring case); "
+                "keep one per speaker"
+            )
+            sys.exit(1)
+
     # Load config (imports dotenv and captures the run profile once).
     from transcript_combobulator.config import (
         LOG_FILE,

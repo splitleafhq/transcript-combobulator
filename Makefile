@@ -1,15 +1,13 @@
 .PHONY: help check-deps setup install setup-whisper run run-single \
-        combine-transcripts filter-vtt session-env compare-transcripts create-sample-files sample-ami check-sample test test-fast lint format typecheck lint-pyrefly \
+        combine-transcripts filter-vtt session-env compare-transcripts create-sample-files sample-ami check-sample test test-fast build lint format typecheck \
         clean-output clean-tmp
 
 ROOT_DIR := $(shell pwd)
 
-# Interpreter used to create the virtualenv. Any CPython >= 3.11 works: the
-# distro python3 on Linux, or Homebrew/pyenv/python.org on macOS. Override with
-# `make setup PYTHON=/path/to/python3.12`.
-PYTHON ?= python3
-# pip extras to install. `mac` adds mlx-whisper on Apple Silicon.
+# Extras to install, comma-separated. `mac` adds mlx-whisper on Apple Silicon.
 EXTRAS ?= dev
+comma := ,
+UV_EXTRAS = $(foreach e,$(subst $(comma), ,$(EXTRAS)),--extra $(e))
 
 # The installed console script; ENV_FILE passes through from the environment.
 VENV_CMD = cd $(ROOT_DIR) && . .venv/bin/activate &&
@@ -25,27 +23,16 @@ help: ## Show this help
 	echo "Per-campaign config: ENV_FILE=.env.<campaign> make run folder=tmp/input/<session>"
 
 # ── Setup ──
-setup: check-deps ## Create .venv from $(PYTHON), install [$(EXTRAS)], download the whisper model
-	cd $(ROOT_DIR) && $(PYTHON) -m venv .venv
-	$(VENV_CMD) pip install --upgrade pip
+setup: check-deps ## Install [$(EXTRAS)] into .venv from uv.lock, download the whisper model
 	$(MAKE) install
 	$(MAKE) setup-whisper
 
 # Verify host prerequisites without touching the venv. Recipes run under
 # /bin/sh, so keep this POSIX (no bashisms like `&>`).
-check-deps: ## Verify Python 3.11+, the venv module, and ffmpeg
-	if ! command -v $(PYTHON) >/dev/null 2>&1; then \
-		echo "$(PYTHON) not found. Install Python 3.11+ (Debian: apt install python3 python3-venv;" \
-		     "macOS: brew install python) or point at one: make setup PYTHON=/path/to/python3"; \
-		exit 1; \
-	fi
-	if ! $(PYTHON) -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)'; then \
-		echo "Python 3.11+ required; $(PYTHON) is $$($(PYTHON) --version 2>&1)." \
-		     "Point at a newer one: make setup PYTHON=/path/to/python3"; \
-		exit 1; \
-	fi
-	if ! $(PYTHON) -c 'import venv, ensurepip' >/dev/null 2>&1; then \
-		echo "The venv module is incomplete for $(PYTHON). Debian/Ubuntu: apt install python3-venv"; \
+check-deps: ## Verify uv and ffmpeg
+	if ! command -v uv >/dev/null 2>&1; then \
+		echo "uv not found; it installs Python and the packages from uv.lock." \
+		     "macOS: brew install uv; Linux: see https://docs.astral.sh/uv/getting-started/installation/"; \
 		exit 1; \
 	fi
 	if ! command -v ffmpeg >/dev/null 2>&1; then \
@@ -53,10 +40,10 @@ check-deps: ## Verify Python 3.11+, the venv module, and ffmpeg
 		     "Debian/Raspberry Pi OS: apt install ffmpeg; macOS: brew install ffmpeg"; \
 		exit 1; \
 	fi
-	echo "Prerequisites OK: $$($(PYTHON) --version 2>&1) at $$(command -v $(PYTHON)); $$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f1-3)"
+	echo "Prerequisites OK: $$(uv --version); $$(ffmpeg -version 2>/dev/null | head -1 | cut -d' ' -f1-3)"
 
-install: ## Install the project into .venv (EXTRAS=dev or EXTRAS=dev,mac)
-	$(VENV_CMD) pip install -e ".[$(EXTRAS)]"
+install: ## Install the project into .venv from uv.lock (EXTRAS=dev or EXTRAS=dev,mac)
+	cd $(ROOT_DIR) && uv sync --locked $(UV_EXTRAS)
 
 setup-whisper: ## Download WHISPER_MODEL into models/ without loading it
 	$(CLI) setup-model
@@ -127,11 +114,17 @@ check-sample: sample-ami ## Transcribe the AMI sample and fail if it differs fro
 	$(VENV_CMD) ENV_FILE="$$env_file" combobulator compare --ref samples/ami/EN2002b-reference.txt \
 		--hyp tmp/output/ami-en2002b/ami-en2002b-combined.txt --strict
 
-test: ## Run the whole suite, including real whisper/VAD inference
-	$(VENV_CMD) python -m pytest tests/ -v
+test: ## Run the suite scripts/check runs, including real whisper/VAD inference
+	$(VENV_CMD) python -m pytest tests/ -v -m "not mlx"
+
+test-mlx: ## Run the opt-in MLX inference test (needs the mlx checkpoint)
+	$(VENV_CMD) python -m pytest tests/ -v -m mlx
 
 test-fast: ## Run the suite without the slow inference tests
-	$(VENV_CMD) python -m pytest tests/ -v -m "not slow"
+	$(VENV_CMD) python -m pytest tests/ -v -m "not slow and not mlx"
+
+build: ## Build the sdist and wheel into dist/, as CI does
+	cd $(ROOT_DIR) && uv build
 
 lint: ## Run ruff check and ruff format --check
 	$(VENV_CMD) ruff check --output-format concise . && ruff format --check .
@@ -139,10 +132,7 @@ lint: ## Run ruff check and ruff format --check
 format: ## Format with ruff
 	$(VENV_CMD) ruff format .
 
-typecheck: ## Run mypy (strict)
-	$(VENV_CMD) mypy transcript_combobulator
-
-lint-pyrefly: ## Run pyrefly beside mypy (trial; mypy stays the gate)
+typecheck: ## Run pyrefly
 	$(VENV_CMD) pyrefly check
 
 # ── Cleanup ──
@@ -155,5 +145,5 @@ clean-output: ## Delete tmp/output/* (all session transcripts, metrics, logs)
 clean-tmp: clean-output ## Delete tmp/output/* and tmp/input/* and caches
 	cd $(ROOT_DIR) && find tmp -mindepth 1 -not -name ".gitkeep" -not -path "tmp/output" -not -path "tmp/input" -delete
 	cd $(ROOT_DIR) && mkdir -p tmp/input tmp/output
-	cd $(ROOT_DIR) && rm -rf __pycache__/ */__pycache__/ */*/__pycache__/ .pytest_cache/ .coverage .mypy_cache/
+	cd $(ROOT_DIR) && rm -rf __pycache__/ */__pycache__/ */*/__pycache__/ .pytest_cache/ .coverage
 	echo "Removed everything under tmp/ and local caches"

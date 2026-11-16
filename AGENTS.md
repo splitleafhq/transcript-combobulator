@@ -29,7 +29,7 @@ transcript_combobulator/
 └── logging_config.py   # setup_logging / file handlers
 ```
 
-`pip install -e .` installs the `combobulator` console script; the Makefile
+`make install` (`uv sync --locked`) installs the `combobulator` console script; the Makefile
 targets are thin wrappers around it. Automation calls the script directly:
 `ENV_FILE=.env.<campaign> combobulator run /path/to/session --session <name>`,
 from any working directory, with no `make` and no `PYTHONPATH`.
@@ -85,9 +85,9 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 
 | Command | Purpose |
 |---------|---------|
-| `make check-deps` | Verify Python 3.11+, `venv` module, and `ffmpeg` on the host |
-| `make setup` | Check deps, create venv from `$(PYTHON)`, `make install`, download whisper model |
-| `make install [EXTRAS=dev,mac]` | `pip install -e ".[EXTRAS]"` into `.venv` |
+| `make check-deps` | Verify `uv` and `ffmpeg` on the host |
+| `make setup` | Check deps, `make install`, download whisper model |
+| `make install [EXTRAS=dev,mac]` | `uv sync --locked` with those extras into `.venv`, from `uv.lock` |
 | `make setup-whisper` | Download `WHISPER_MODEL` into `models/` (checksum-verified, no model load); with `WHISPER_RUNTIME=mlx`, the pinned mlx checkpoint into `models/mlx/<model>/` |
 | `make run folder=path/ [force=1]` | Full parallel pipeline for one session; the only thing automation calls |
 | `make run-single file=path [force=1]` | Convert → VAD → transcribe one file, no combine |
@@ -99,11 +99,12 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make sample-ami` | Fetch the 4-speaker AMI sample into `tmp/input/ami-en2002b/` (network, checksum-verified) |
 | `make check-sample` | Transcribe the AMI sample; print WER against `samples/ami/EN2002b-human.txt` (no gate); fail if any word differs from `samples/ami/EN2002b-reference.txt` |
 | `make test-fast` | pytest without the `slow` (real inference) tests |
-| `make test` | Whole suite; never touches `tmp/output` |
+| `make test` | The suite `scripts/check` runs, real inference included; never touches `tmp/output` |
+| `make test-mlx` | Opt-in MLX inference test; needs `mlx_whisper` and the mlx checkpoint |
+| `make build` | `uv build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
 | `make format` | `ruff format` |
-| `make typecheck` | `mypy --strict` |
-| `make lint-pyrefly` | pyrefly, on trial beside mypy; not a gate yet |
+| `make typecheck` | `pyrefly check` |
 | `make clean-output` | Delete every session's outputs under `tmp/output` |
 | `make clean-tmp` | Also delete `tmp/input` and local caches |
 
@@ -150,6 +151,9 @@ calls, so it fails fast and leaves a trail:
 - Before any worker starts, `transcript_combobulator.combine.validate_speaker_mapping` runs
   against the input stems before any worker starts. Same errors as the combine
   step, minutes earlier.
+- Two inputs whose stems match ignoring case (`1-cadderly.flac` and
+  `1-cadderly.wav`) exit 1 before any work: the stem names the output folder,
+  so both workers would write the same files. Bundles reject the same pair.
 - A missing `ENV_FILE` raises at import instead of silently loading nothing.
 - `LOG_FILE` (default empty) persists worker and parent logs to
   `tmp/output/<session>/<session>.log`; workers tag lines with their audio
@@ -365,8 +369,9 @@ fails loudly.
   change.
 - `tests/test_combine.py` is fast (pure Python over synthetic VTTs).
 - `tests/test_vad.py`, `tests/test_transcription.py`, `tests/test_whisper.py`
-  are marked `slow` (real inference). `make test-fast` skips them; run
-  `make test` when changing the audio pipeline.
+  are marked `slow` (real inference, about 20 s). `scripts/check` and `make test`
+  run them; CI and `make test-fast` skip them (no models there). The MLX test is
+  marked `mlx` and runs only with `make test-mlx`.
 - `make test` never cleans `tmp/output`. Slow tests write under
   `tmp/output/test_jfk*/`; `make clean-output` removes everything.
 - Whisper segment count is nondeterministic — use range assertions, not exact
@@ -390,8 +395,10 @@ fails loudly.
   logic because silero only accepts a whole-file tensor. Bumping `silero-vad`
   must keep `tests/test_vad_streaming.py` green; if silero changes the
   algorithm, port the change, do not paper over the diff.
-- `ffmpeg` must be on `PATH`. Makefile recipes run under `/bin/sh` (dash on
-  Debian), so keep them POSIX: `>/dev/null 2>&1`, never `&>`.
+- `ffmpeg` must be on `PATH`, and its `ffprobe`: libsndfile cannot read
+  `.m4a` or `.aac`, so conversion and the timing report take their duration
+  from ffprobe. Makefile recipes run under `/bin/sh` (dash on Debian), so keep
+  them POSIX: `>/dev/null 2>&1`, never `&>`.
 
 ## Error Handling Style
 
@@ -416,6 +423,7 @@ fails loudly.
    extend one that already covers it. Use synthetic fixtures where possible, and
    the slow whisper tests only when testing whisper behavior.
 6. Run `make lint`, `make typecheck` and `make test` before declaring done.
+   `scripts/check` runs CI's steps (ruff, pyrefly, tests, build) plus the slow real-inference tests CI can't run (it has no models) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
 
 ## Common Pitfalls
 
