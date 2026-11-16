@@ -138,9 +138,9 @@ Transcription checkpoints per chunk to `<stem>_progress.jsonl` (header line
 with the inference fingerprint, then one JSON line per completed chunk). A
 rerun with the same fingerprint reuses those chunks (`status: resumed`) and
 transcribes only the missing ones; a truncated last line is ignored and that
-chunk redone. The file is removed when every chunk succeeded and kept when
-any failed, so a rerun retries only the failed
-chunks. Verified by killing a real 2.9 h track mid-transcription and
+chunk redone. The file is removed when every chunk succeeded, and by any run
+recorded complete, and kept when any failed, so a rerun retries only the
+failed chunks. Verified by killing a real 2.9 h track mid-transcription and
 resuming: output identical to the uninterrupted run.
 
 ## Batch Run Behaviour

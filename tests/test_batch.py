@@ -3,6 +3,7 @@
 
 import json
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
@@ -459,6 +460,58 @@ class TestProcessSingleFile:
         data, sample_rate = sf.read(str(output_file), dtype="float32")
         assert sample_rate == 16000
         assert 0.98 <= float(np.abs(data).max()) <= 1.0
+
+    def test_a_finished_run_clears_a_checkpoint_it_did_not_use(self, tmp_path):
+        """A run that completes without chunk inference (a silent track after a
+        settings change) still clears an interrupted run's checkpoint, so a
+        manual combine accepts its VTT."""
+        from transcript_combobulator.pipeline import process_file as main
+        from transcript_combobulator.pipeline_cache import is_vtt_unfinished
+
+        input_file = tmp_path / "input" / "3-regis.wav"
+        input_file.parent.mkdir()
+        sf.write(
+            str(input_file), np.zeros(16000, dtype=np.float32), 16000, subtype="PCM_16"
+        )
+        output_dir = tmp_path / "output" / "3-regis"
+        output_dir.mkdir(parents=True)
+        progress = output_dir / "3-regis_progress.jsonl"
+        progress.write_text('{"key": "an interrupted run"}\n', encoding="utf-8")
+        vtt = output_dir / "3-regis.vtt"
+        transcription = {
+            "vtt_file": str(vtt),
+            "json_file": str(output_dir / "3-regis_transcription.json"),
+            "mapping_file": str(output_dir / "3-regis_mapping.json"),
+        }
+
+        def silent_track(*args, **kwargs):
+            for path in transcription.values():
+                Path(path).write_text(
+                    "WEBVTT\n" if path.endswith(".vtt") else "{}", encoding="utf-8"
+                )
+            return transcription
+
+        with (
+            patch(
+                "transcript_combobulator.pipeline.get_output_path_for_input",
+                return_value=output_dir,
+            ),
+            patch(
+                "transcript_combobulator.pipeline.is_pipeline_complete",
+                return_value=False,
+            ),
+            patch(
+                "transcript_combobulator.pipeline.process_audio",
+                return_value=(output_dir, []),
+            ),
+            patch(
+                "transcript_combobulator.pipeline.transcribe_segments",
+                side_effect=silent_track,
+            ),
+        ):
+            main(str(input_file))
+
+        assert not is_vtt_unfinished(vtt)
 
     def test_cache_miss_removes_existing_audio_before_conversion(self, tmp_path):
         """Conversion cannot silently reuse a valid but stale derived WAV."""
