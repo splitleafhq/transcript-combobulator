@@ -66,7 +66,13 @@ The standard pipeline: `transcript_combobulator.batch.main` →
 - **Partial transcription is a failure.** Any failed chunk raises before the
   manifest is written, so the cache cannot
   hide a transcript with gaps. A track with no speech at all is an empty
-  transcript, not an error.
+  transcript, not an error. whisper still writes that track's VTT, so a
+  manual `combobulator combine` refuses a VTT whose folder holds a chunk
+  checkpoint (`<stem>_progress.jsonl`), or a current-version manifest
+  without a `vtt` record naming it: the marks a failed or interrupted run
+  leaves. A folder with no manifest, or one from an older cache version,
+  predates these records (cache version 3), so its VTT is combined as
+  before, unchecked.
 - **Usernames match as whole tokens** in per-speaker dir names, so `wulf`
   never claims `5-wulfgar`. Batch runs hand combine the exact VTTs they
   produced; stale sibling dirs are ignored.
@@ -132,9 +138,9 @@ Transcription checkpoints per chunk to `<stem>_progress.jsonl` (header line
 with the inference fingerprint, then one JSON line per completed chunk). A
 rerun with the same fingerprint reuses those chunks (`status: resumed`) and
 transcribes only the missing ones; a truncated last line is ignored and that
-chunk redone. The file is removed when every chunk succeeded and kept when
-any failed, so a rerun retries only the failed
-chunks. Verified by killing a real 2.9 h track mid-transcription and
+chunk redone. The file is removed when every chunk succeeded, and by any run
+recorded complete, and kept when any failed, so a rerun retries only the
+failed chunks. Verified by killing a real 2.9 h track mid-transcription and
 resuming: output identical to the uninterrupted run.
 
 ## Batch Run Behaviour

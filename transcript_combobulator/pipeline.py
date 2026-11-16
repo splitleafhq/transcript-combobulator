@@ -251,6 +251,9 @@ def process_file(
         ]
         with _timed_stage(file_metrics, "manifest_write"):
             write_pipeline_manifest(input_file, manifest_path, artifacts)
+            # A run recorded complete leaves no checkpoint, including one an
+            # interrupted run left that this run never read (a silent track).
+            progress_path.unlink(missing_ok=True)
         file_metrics["artifact_count"] = len(artifacts)
         file_metrics["status"] = "processed"
 
