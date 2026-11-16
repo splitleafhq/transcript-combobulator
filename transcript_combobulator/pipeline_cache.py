@@ -207,6 +207,20 @@ def load_chunk_checkpoint(progress_path: Path, key: str) -> dict[int, dict[str, 
     return completed
 
 
+def _drop_partial_line(progress_path: Path) -> None:
+    """Cut an interrupted last write, so the next record starts its own line.
+
+    Appending after the fragment would glue the next record onto it, and the
+    reader stops at the first line it cannot parse.
+    """
+    if not progress_path.is_file():
+        return
+    data = progress_path.read_bytes()
+    if data and not data.endswith(b"\n"):
+        with open(progress_path, "r+b") as f:
+            f.truncate(data.rfind(b"\n") + 1)
+
+
 class ChunkCheckpoint:
     """Append-only per-chunk progress. Each completed chunk is one JSON line."""
 
@@ -215,7 +229,8 @@ class ChunkCheckpoint:
         self.key = key
         self.completed = load_chunk_checkpoint(progress_path, key)
         progress_path.parent.mkdir(parents=True, exist_ok=True)
-        new_file = not progress_path.is_file()
+        _drop_partial_line(progress_path)
+        new_file = not progress_path.is_file() or progress_path.stat().st_size == 0
         self._handle = open(progress_path, "a", encoding="utf-8")
         if new_file:
             self._handle.write(json.dumps({"key": key}) + "\n")

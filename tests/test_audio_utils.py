@@ -1,5 +1,6 @@
 """Conversion to 16 kHz mono WAV."""
 
+import subprocess
 from pathlib import Path
 from unittest.mock import patch
 
@@ -10,7 +11,6 @@ import soundfile as sf
 from transcript_combobulator.audio_utils import (
     AudioValidationError,
     convert_to_wav,
-    needs_conversion,
     validate_audio_file,
 )
 
@@ -27,7 +27,6 @@ def test_ffmpeg_conversion_yields_16k_mono_peak_normalized(tmp_path: Path) -> No
     src = tmp_path / "in.wav"
     _stereo_44k(src)
     out = tmp_path / "out.wav"
-    assert needs_conversion(src)
 
     convert_to_wav(src, out)
 
@@ -37,8 +36,38 @@ def test_ffmpeg_conversion_yields_16k_mono_peak_normalized(tmp_path: Path) -> No
     assert abs(info["duration"] - 2.0) < 0.002
     data, _ = sf.read(str(out), dtype="float32")
     assert 0.98 <= float(np.abs(data).max()) <= 1.0
-    assert not needs_conversion(out)
     assert not list(tmp_path.glob("*.unnormalized.wav"))
+
+
+@pytest.mark.parametrize("suffix", [".m4a", ".aac"])
+def test_formats_libsndfile_cannot_read_convert_through_ffmpeg(
+    tmp_path: Path, suffix: str
+) -> None:
+    wav = tmp_path / "source.wav"
+    _stereo_44k(wav)
+    src = tmp_path / f"1-cadderly{suffix}"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-nostdin",
+            "-loglevel",
+            "error",
+            "-i",
+            str(wav),
+            "-c:a",
+            "aac",
+            str(src),
+        ],
+        check=True,
+    )
+    out = tmp_path / "out.wav"
+
+    convert_to_wav(src, out)
+
+    info = validate_audio_file(out)
+    assert info["sample_rate"] == 16000
+    assert info["channels"] == 1
+    assert abs(info["duration"] - 2.0) < 0.1
 
 
 def test_missing_ffmpeg_is_a_clear_error(tmp_path: Path) -> None:
@@ -60,8 +89,6 @@ def test_existing_correct_output_is_reused(tmp_path: Path) -> None:
 
 
 def test_ffmpeg_timeout_is_a_clear_error(tmp_path: Path) -> None:
-    import subprocess
-
     src = tmp_path / "in.wav"
     _stereo_44k(src)
     with (

@@ -46,19 +46,6 @@ def validate_audio_file(file_path: Path) -> dict[str, Any]:
         raise AudioValidationError(f"Failed to read audio file {file_path}: {e}") from e
 
 
-def needs_conversion(file_path: Path, target_sample_rate: int = 16000) -> bool:
-    """True if the file isn't already 16kHz mono WAV."""
-    try:
-        info = validate_audio_file(file_path)
-    except AudioValidationError:
-        return True
-    return bool(
-        info["format"] != ".wav"
-        or info["sample_rate"] != target_sample_rate
-        or info["channels"] != 1
-    )
-
-
 def convert_to_wav(
     input_path: Path, output_path: Path, target_sample_rate: int = 16000
 ) -> None:
@@ -80,17 +67,14 @@ def convert_to_wav(
             logger.info(f"Existing file {output_path} is invalid, reconverting...")
 
     try:
-        input_info = validate_audio_file(input_path)
-        logger.info(
-            f"Converting {input_path} (SR: {input_info['sample_rate']}, "
-            f"Channels: {input_info['channels']}) to WAV"
-        )
+        duration = input_duration(input_path)
+        logger.info(f"Converting {input_path} ({duration:.2f}s) to WAV")
         output_path.parent.mkdir(parents=True, exist_ok=True)
         _convert_with_ffmpeg(
             input_path,
             output_path,
             target_sample_rate,
-            timeout_seconds=max(600.0, 10.0 * float(input_info["duration"])),
+            timeout_seconds=max(600.0, 10.0 * duration),
         )
 
         info = validate_audio_file(output_path)
@@ -100,6 +84,46 @@ def convert_to_wav(
         )
     except Exception as e:
         raise AudioValidationError(f"Failed to convert {input_path} to WAV: {e}") from e
+
+
+def input_duration(input_path: Path) -> float:
+    """Duration of a supported input in seconds, read by ffprobe if libsndfile can't.
+
+    libsndfile has no AAC/MP4 decoder, so .m4a and .aac only open in ffmpeg.
+    """
+    if not input_path.exists() or input_path.suffix.lower() not in SUPPORTED_FORMATS:
+        return float(validate_audio_file(input_path)["duration"])
+    try:
+        with sf.SoundFile(str(input_path)) as f:
+            return float(f.frames / f.samplerate)
+    except sf.LibsndfileError:
+        pass
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        raise AudioValidationError(
+            f"ffprobe not found on PATH; it is needed to read {input_path.suffix} "
+            "(it ships with ffmpeg)"
+        )
+    try:
+        result = subprocess.run(
+            [
+                ffprobe,
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(input_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        return float(result.stdout.strip())
+    except (subprocess.SubprocessError, ValueError) as e:
+        raise AudioValidationError(f"ffprobe could not read {input_path}: {e}") from e
 
 
 def _convert_with_ffmpeg(

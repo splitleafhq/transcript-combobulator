@@ -17,11 +17,10 @@ Processes separate audio files and creates organized transcripts:
 
 | Requirement | Debian / Raspberry Pi OS | macOS |
 |---|---|---|
-| Python 3.11+ with `venv` | `sudo apt install python3 python3-venv` | `brew install python` (or pyenv, python.org) |
+| uv (installs Python and the locked packages) | [uv's installer](https://docs.astral.sh/uv/getting-started/installation/) | `brew install uv` |
 | ffmpeg (audio decoding) | `sudo apt install ffmpeg` | `brew install ffmpeg` |
 
-Debian bookworm ships Python 3.11 and trixie ships 3.13; both work. The Mac
-uses 3.14 through pyenv (`.python-version`). No version manager is required. `make check-deps` reports what is missing.
+uv installs the Python in `.python-version` (3.14) if it isn't there. `make check-deps` reports what is missing.
 
 ### Install
 
@@ -31,17 +30,10 @@ cd transcript-combobulator
 make setup
 ```
 
-`make setup` verifies prerequisites, creates `.venv` from `python3` on your
-`PATH`, installs pinned dependencies, and downloads the Whisper model
-(`WHISPER_MODEL`, ~1.6 GB for the default `large-v3-turbo`). To use a specific
-interpreter:
-
-```sh
-make setup PYTHON=/usr/bin/python3.12
-```
-
-pyenv users: the committed `.python-version` selects 3.14.3 through the
-pyenv shim (`pyenv install 3.14.3` once).
+`make setup` verifies prerequisites, installs the packages in `uv.lock` into
+`.venv` (`uv sync --locked`), and downloads the Whisper model
+(`WHISPER_MODEL`, ~1.6 GB for the default `large-v3-turbo`). `pip install .`
+still works from the exact pins in `pyproject.toml`.
 
 Apple Silicon can run Whisper on the GPU instead of the CPU. `WHISPER_DEVICE=mps`
 needs nothing extra. `WHISPER_RUNTIME=mlx` is faster still: `make install
@@ -115,8 +107,8 @@ VAD_MIN_SPEECH_DURATION=0.25
 make help                               # Every target with a one-line description
 
 # Setup
-make check-deps                         # Verify Python 3.11+, venv, and ffmpeg
-make setup                              # Create .venv, install, download the Whisper model
+make check-deps                         # Verify uv and ffmpeg
+make setup                              # Install from uv.lock into .venv, download the Whisper model
 make install EXTRAS=dev,mac             # Reinstall with extras (mac adds mlx-whisper)
 
 # Processing
@@ -131,11 +123,15 @@ make compare-transcripts ref="old-1.txt old-2.txt" hyp="new-1.txt new-2.txt"  # 
 
 # Dev
 make test-fast                          # Suite without real inference (seconds)
-make test                               # Whole suite (minutes)
+make test                               # Suite scripts/check runs, real inference included (about 20 s)
+make test-mlx                           # Opt-in MLX inference test (needs the mlx checkpoint)
 make check-sample                       # Transcribe the 4-speaker AMI sample; print WER against AMI's human transcript; fail if any word changed (samples/ami/NOTICE.md)
 make lint                               # ruff check and format check
 make format                             # ruff format
-make typecheck                          # mypy --strict
+make typecheck                          # pyrefly check
+make build                              # sdist and wheel into dist/, as CI does
+scripts/check                           # CI's checks: ruff, pyrefly, fast tests, build; fails on a missing or stale .venv
+git config core.hooksPath .githooks     # Once per clone: run scripts/check before every push
 make clean-output                       # Delete every session's outputs under tmp/output
 ```
 

@@ -2,9 +2,12 @@
 """Test batch processing utilities."""
 
 import json
+import subprocess
 from unittest.mock import patch
 
+import numpy as np
 import pytest
+import soundfile as sf
 from rich.console import Console
 
 from transcript_combobulator.batch import (
@@ -78,6 +81,29 @@ class TestFindAudioFiles:
         files = find_audio_files(tmp_path)
         assert len(files) == 1
         assert files[0].name == "top.wav"
+
+
+class TestDuplicateStems:
+    """Two inputs naming one output folder must not both reach the workers."""
+
+    def test_run_rejects_shared_stem(self, tmp_path, capsys):
+        from transcript_combobulator.batch import main
+
+        (tmp_path / "jfk_1.flac").touch()
+        (tmp_path / "JFK_1.wav").touch()
+
+        # Stop the run where workers would start, in case the check is missing.
+        with (
+            patch(
+                "multiprocessing.Manager", side_effect=AssertionError("workers started")
+            ),
+            pytest.raises(SystemExit) as exit_info,
+        ):
+            main([str(tmp_path)])
+
+        assert exit_info.value.code == 1
+        out = capsys.readouterr().out
+        assert "jfk_1.flac" in out and "JFK_1.wav" in out
 
 
 class TestBuildTable:
@@ -263,6 +289,44 @@ class TestProcessSingleFile:
         assert "cache_check_seconds" in metrics["stages"]
         process_audio.assert_not_called()
 
+    @pytest.mark.parametrize("suffix", [".m4a", ".aac"])
+    def test_input_seconds_recorded_for_formats_libsndfile_cannot_read(
+        self, tmp_path, suffix
+    ):
+        """The timing report reads .m4a/.aac duration too, so speed and totals count it."""
+        from transcript_combobulator.pipeline import process_file as main
+
+        input_file = tmp_path / f"1-cadderly{suffix}"
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-loglevel",
+                "error",
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=2",
+                "-c:a",
+                "aac",
+                str(input_file),
+            ],
+            check=True,
+        )
+        with (
+            patch(
+                "transcript_combobulator.pipeline.get_output_path_for_input",
+                return_value=tmp_path,
+            ),
+            patch(
+                "transcript_combobulator.pipeline.is_pipeline_complete",
+                return_value=True,
+            ),
+        ):
+            metrics = main(str(input_file))
+
+        assert metrics["input_audio_seconds"] == pytest.approx(2.0, abs=0.1)
+
     def test_force_ignores_completed_pipeline(self, tmp_path):
         """Force mode runs processing even when a completion manifest exists."""
         from transcript_combobulator.pipeline import process_file as main
@@ -285,7 +349,8 @@ class TestProcessSingleFile:
                 return_value=True,
             ),
             patch(
-                "transcript_combobulator.pipeline.needs_conversion", return_value=False
+                "transcript_combobulator.pipeline.convert_to_wav",
+                side_effect=lambda source, destination: destination.touch(),
             ),
             patch(
                 "transcript_combobulator.pipeline.process_audio",
@@ -336,7 +401,8 @@ class TestProcessSingleFile:
                 return_value=True,
             ),
             patch(
-                "transcript_combobulator.pipeline.needs_conversion", return_value=False
+                "transcript_combobulator.pipeline.convert_to_wav",
+                side_effect=lambda source, destination: destination.touch(),
             ),
             patch(
                 "transcript_combobulator.pipeline.process_audio",
@@ -350,21 +416,23 @@ class TestProcessSingleFile:
 
         assert "vtt" not in load_manifest(manifest)
 
-    def test_cache_miss_replaces_existing_normalized_audio(self, tmp_path):
-        """A changed normalized source replaces the prior derived WAV."""
+    def test_quiet_16k_mono_wav_is_peak_normalised(self, tmp_path):
+        """A 16 kHz mono WAV reaches VAD at the same level as any other input."""
         from transcript_combobulator.pipeline import process_file as main
 
-        input_file = tmp_path / "input" / "speaker.wav"
+        input_file = tmp_path / "input" / "2-danica.wav"
         input_file.parent.mkdir()
-        input_file.write_bytes(b"new audio")
+        t = np.arange(16000) / 16000
+        quiet = (0.1 * np.sin(2 * np.pi * 440 * t)).astype(np.float32)
+        sf.write(str(input_file), quiet, 16000, subtype="PCM_16")
         output_dir = tmp_path / "output"
         output_dir.mkdir()
-        output_file = output_dir / "speaker.wav"
+        output_file = output_dir / "2-danica.wav"
         output_file.write_bytes(b"old audio")
         transcription = {
-            "vtt_file": str(output_dir / "speaker.vtt"),
-            "json_file": str(output_dir / "speaker.json"),
-            "mapping_file": str(output_dir / "speaker_mapping.json"),
+            "vtt_file": str(output_dir / "2-danica.vtt"),
+            "json_file": str(output_dir / "2-danica.json"),
+            "mapping_file": str(output_dir / "2-danica_mapping.json"),
         }
 
         with (
@@ -375,9 +443,6 @@ class TestProcessSingleFile:
             patch(
                 "transcript_combobulator.pipeline.is_pipeline_complete",
                 return_value=False,
-            ),
-            patch(
-                "transcript_combobulator.pipeline.needs_conversion", return_value=False
             ),
             patch(
                 "transcript_combobulator.pipeline.process_audio",
@@ -391,7 +456,9 @@ class TestProcessSingleFile:
         ):
             main(str(input_file))
 
-        assert output_file.read_bytes() == b"new audio"
+        data, sample_rate = sf.read(str(output_file), dtype="float32")
+        assert sample_rate == 16000
+        assert 0.98 <= float(np.abs(data).max()) <= 1.0
 
     def test_cache_miss_removes_existing_audio_before_conversion(self, tmp_path):
         """Conversion cannot silently reuse a valid but stale derived WAV."""
@@ -423,9 +490,6 @@ class TestProcessSingleFile:
             patch(
                 "transcript_combobulator.pipeline.is_pipeline_complete",
                 return_value=False,
-            ),
-            patch(
-                "transcript_combobulator.pipeline.needs_conversion", return_value=True
             ),
             patch(
                 "transcript_combobulator.pipeline.convert_to_wav",
@@ -662,7 +726,8 @@ class TestPartialTranscriptionFailsFile:
                 return_value=False,
             ),
             patch(
-                "transcript_combobulator.pipeline.needs_conversion", return_value=False
+                "transcript_combobulator.pipeline.convert_to_wav",
+                side_effect=lambda source, destination: destination.touch(),
             ),
             patch(
                 "transcript_combobulator.pipeline.process_audio",
@@ -713,7 +778,8 @@ class TestOutputPlacement:
                 return_value=False,
             ),
             patch(
-                "transcript_combobulator.pipeline.needs_conversion", return_value=False
+                "transcript_combobulator.pipeline.convert_to_wav",
+                side_effect=lambda source, destination: destination.touch(),
             ),
             patch(
                 "transcript_combobulator.pipeline.process_audio",
@@ -738,6 +804,46 @@ class TestOutputPlacement:
         out, ts = self._run(tmp_path, link)
         assert out.call_args.args == (link, None)
         assert ts.call_args.args[1] == tmp_path / "out"
+
+    def test_link_named_unlike_its_target_writes_the_vtt_combine_reads(
+        self, tmp_path, monkeypatch
+    ):
+        from transcript_combobulator import config
+        from transcript_combobulator.pipeline import process_file
+
+        monkeypatch.setattr(config, "OUTPUT_DIR", tmp_path / "output")
+        real = tmp_path / "archive" / "4-pikel_123.wav"
+        real.parent.mkdir()
+        real.write_bytes(b"audio")
+        link = tmp_path / "s11" / "4-pikel.wav"
+        link.parent.mkdir()
+        link.symlink_to(real)
+
+        def fake_transcribe(audio_path, output_dir, **kwargs):
+            # Names its files from the audio it is handed, as the real one does.
+            vtt = output_dir / config.vtt_name_for_stem(audio_path.stem)
+            vtt.write_text("WEBVTT\n")
+            return {
+                "vtt_file": str(vtt),
+                "json_file": str(output_dir / f"{audio_path.stem}_transcription.json"),
+                "mapping_file": str(output_dir / f"{audio_path.stem}_mapping.json"),
+                "metrics": {"chunk_count": 0, "failed_chunk_count": 0, "chunks": []},
+            }
+
+        with (
+            patch("transcript_combobulator.pipeline.convert_to_wav"),
+            patch(
+                "transcript_combobulator.pipeline.process_audio",
+                return_value=(tmp_path, []),
+            ),
+            patch(
+                "transcript_combobulator.pipeline.transcribe_segments",
+                side_effect=fake_transcribe,
+            ),
+            patch("transcript_combobulator.pipeline.write_pipeline_manifest"),
+        ):
+            process_file(str(link), session="s11")
+        assert config.vtt_path_for_input(link, "s11").exists()
 
     def test_session_is_passed_through(self, tmp_path):
         track = tmp_path / "1-cadderly.wav"
@@ -801,9 +907,6 @@ class TestStageReuse:
                 return_value=output_dir,
             ),
             patch("transcript_combobulator.pipeline.convert_to_wav") as convert,
-            patch(
-                "transcript_combobulator.pipeline.needs_conversion", return_value=True
-            ),
             patch("transcript_combobulator.pipeline.process_audio") as vad,
             patch(
                 "transcript_combobulator.pipeline.transcribe_segments",
@@ -855,3 +958,51 @@ class TestStageReuse:
         assert metrics["transcription"]["inference_cached"] is True
         assert "Hello" in vtt.read_text(encoding="utf-8")
         assert "vtt_rewrite_seconds" in metrics["stages"]
+
+    def test_missing_vtt_is_rewritten_from_json_without_inference(self, tmp_path):
+        from transcript_combobulator.pipeline import process_file as main
+
+        input_file, output_dir, manifest, fps = self._setup(tmp_path)
+        json_path = output_dir / "speaker_transcription.json"
+        vtt = output_dir / "speaker.vtt"
+
+        def transcribe(*args, **kwargs):
+            json_path.write_text(
+                json.dumps(
+                    {
+                        "segments": [
+                            {
+                                "start": 1.0,
+                                "end": 2.0,
+                                "text": "Hello",
+                                "confidence": 90.0,
+                            }
+                        ]
+                    }
+                )
+            )
+            vtt.write_text("WEBVTT\n", encoding="utf-8")
+            return {
+                "vtt_file": str(vtt),
+                "json_file": str(json_path),
+                "mapping_file": str(output_dir / "speaker_mapping.json"),
+                "metrics": {"chunk_count": 1, "failed_chunk_count": 0, "chunks": []},
+            }
+
+        with (
+            patch(
+                "transcript_combobulator.pipeline.get_output_path_for_input",
+                return_value=output_dir,
+            ),
+            patch(
+                "transcript_combobulator.pipeline.transcribe_segments",
+                side_effect=transcribe,
+            ) as ts,
+        ):
+            main(str(input_file))
+            vtt.unlink()
+            metrics = main(str(input_file))
+
+        ts.assert_called_once()
+        assert metrics["transcription"]["inference_cached"] is True
+        assert "Hello" in vtt.read_text(encoding="utf-8")

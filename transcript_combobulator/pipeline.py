@@ -2,7 +2,6 @@
 
 import json
 import logging
-import shutil
 import time
 from contextlib import contextmanager
 from pathlib import Path
@@ -11,8 +10,7 @@ from typing import Any, Generator, MutableMapping, Optional
 from transcript_combobulator.audio_utils import (
     AudioValidationError,
     convert_to_wav,
-    needs_conversion,
-    validate_audio_file,
+    input_duration,
 )
 from transcript_combobulator.config import (
     get_output_path_for_input,
@@ -57,8 +55,10 @@ def process_file(
     metrics: Optional[dict[str, Any]] = None,
     session: Optional[str] = None,
 ) -> dict[str, Any]:
-    # Read through symlinks, but place output by the path as given.
+    # Read through symlinks, but place and name output by the path as given,
+    # so the VTT lands where vtt_path_for_input looks for it.
     input_file = Path(input_path).resolve()
+    stem = Path(input_path).stem
     setup_logging()
     file_metrics = metrics if metrics is not None else {}
     file_metrics.clear()
@@ -89,19 +89,17 @@ def process_file(
     try:
         with _timed_stage(file_metrics, "input_probe"):
             try:
-                audio_info = validate_audio_file(input_file)
+                duration = input_duration(input_file)
             except AudioValidationError:
                 file_metrics["input_audio_seconds"] = None
             else:
-                file_metrics["input_audio_seconds"] = round(
-                    float(audio_info["duration"]), 6
-                )
+                file_metrics["input_audio_seconds"] = round(duration, 6)
 
         with _timed_stage(file_metrics, "setup"):
             output_dir = get_output_path_for_input(Path(input_path), session)
             output_dir.mkdir(parents=True, exist_ok=True)
-            output_file = output_dir / f"{input_file.stem}.wav"
-            manifest_path = get_manifest_path(output_dir, input_file.stem)
+            output_file = output_dir / f"{stem}.wav"
+            manifest_path = get_manifest_path(output_dir, stem)
             file_metrics["output_dir"] = str(output_dir)
 
         with _timed_stage(file_metrics, "cache_check"):
@@ -114,10 +112,10 @@ def process_file(
             return file_metrics
 
         fingerprints = build_stage_fingerprints(input_file)
-        progress_path = get_progress_path(output_dir, input_file.stem)
-        mapping_path = output_dir / f"{input_file.stem}_mapping.json"
-        json_path = output_dir / f"{input_file.stem}_transcription.json"
-        vtt_path = output_dir / vtt_name_for_stem(input_file.stem)
+        progress_path = get_progress_path(output_dir, stem)
+        mapping_path = output_dir / f"{stem}_mapping.json"
+        json_path = output_dir / f"{stem}_transcription.json"
+        vtt_path = output_dir / vtt_name_for_stem(stem)
         with _timed_stage(file_metrics, "cache_invalidation"):
             if force:
                 # A forced run trusts nothing it finds.
@@ -140,17 +138,11 @@ def process_file(
                 # A cache miss must not reuse audio derived from an older source.
                 if output_file.resolve() != input_file:
                     output_file.unlink(missing_ok=True)
-                conversion_required = needs_conversion(input_file)
-                file_metrics["conversion"] = {
-                    "required": conversion_required,
-                    "action": "converted" if conversion_required else "copied",
-                }
-                if conversion_required:
-                    convert_to_wav(input_file, output_file)
-                else:
-                    if not output_file.exists():
-                        shutil.copy(input_file, output_file)
-                    logger.info("No conversion needed, copied to output directory")
+                # Even a 16 kHz mono WAV is converted: conversion is where the
+                # peak normalisation happens, so VAD sees the same level
+                # whatever the container.
+                file_metrics["conversion"] = {"required": True, "action": "converted"}
+                convert_to_wav(input_file, output_file)
                 record_stage(
                     manifest_path,
                     "conversion",
@@ -242,11 +234,12 @@ def process_file(
             )
 
         if not stage_is_complete(stages, "inference", fingerprints["inference"]):
+            # Only the JSON: a missing VTT is rewritten from it, not re-inferred.
             record_stage(
                 manifest_path,
                 "inference",
                 fingerprints["inference"],
-                [Path(transcription["json_file"]), Path(transcription["vtt_file"])],
+                [Path(transcription["json_file"])],
             )
 
         artifacts = [
