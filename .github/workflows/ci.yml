@@ -50,6 +50,8 @@ jobs:
           enable-cache: true
       - run: uv sync --locked --extra dev
       - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      # The tiny model (about 75 MB) is the smoke test's real whisper; checksum-verified.
+      - run: WHISPER_MODEL=tiny uv run --no-sync combobulator setup-model
       - run: uv run --no-sync python -m pytest -q --tb=short --no-header --color=no -m "not slow and not mlx"
   build:
     runs-on: ubuntu-latest
