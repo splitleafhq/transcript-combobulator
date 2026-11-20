@@ -32,7 +32,8 @@ make setup
 
 `make setup` verifies prerequisites, installs the packages in `uv.lock` into
 `.venv` (`uv sync --locked`), and downloads the Whisper model
-(`WHISPER_MODEL`, ~1.6 GB for the default `large-v3-turbo`). `pip install .`
+(`WHISPER_MODEL`, ~1.6 GB for the default `large-v3-turbo`) and `tiny` (~75 MB,
+what the tests that CI runs use; `make setup-tiny` fetches it alone). `pip install .`
 still works from the exact pins in `pyproject.toml`.
 
 Apple Silicon can run Whisper on the GPU instead of the CPU. `WHISPER_DEVICE=mps`
@@ -108,7 +109,7 @@ make help                               # Every target with a one-line descripti
 
 # Setup
 make check-deps                         # Verify uv and ffmpeg
-make setup                              # Install from uv.lock into .venv, download the Whisper model
+make setup                              # Install from uv.lock into .venv, download the Whisper model and tiny
 make install EXTRAS=dev,mac             # Reinstall with extras (mac adds mlx-whisper)
 
 # Processing
@@ -122,15 +123,15 @@ make filter-vtt file=path/to/file.flac threshold=60  # Re-emit a VTT above a con
 make compare-transcripts ref="old-1.txt old-2.txt" hyp="new-1.txt new-2.txt"  # Per-speaker differences between two runs
 
 # Dev
-make test-fast                          # Suite without real inference (seconds)
-make test                               # Suite scripts/check runs, real inference included (about 20 s)
+make test-fast                          # Suite as CI runs it: VAD and whisper tiny inference, no large model (needs make setup-tiny once)
+make test                               # Suite scripts/check runs, large-model inference included (about 20 s more; needs make setup)
 make test-mlx                           # Opt-in MLX inference test (needs the mlx checkpoint)
 make check-sample                       # Transcribe the 4-speaker AMI sample; print WER against AMI's human transcript; fail if any word changed (samples/ami/NOTICE.md)
 make lint                               # ruff check and format check
 make format                             # ruff format
 make typecheck                          # pyrefly check
 make build                              # sdist and wheel into dist/, as CI does
-scripts/check                           # CI's checks: ruff, pyrefly, fast tests, build; fails on a missing or stale .venv
+scripts/check                           # CI's checks: ruff, pyrefly, tests (large model included), build; fails on a missing or stale .venv
 git config core.hooksPath .githooks     # Once per clone: run scripts/check before every push
 make clean-output                       # Delete every session's outputs under tmp/output
 ```

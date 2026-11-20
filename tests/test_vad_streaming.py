@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-import pytest
 import soundfile as sf
 import torch
 from silero_vad import get_speech_timestamps
@@ -21,10 +20,6 @@ from transcript_combobulator.vad import (
     load_vad_model,
     process_audio,
 )
-
-pytestmark = (
-    pytest.mark.slow
-)  # real silero inference on a few minutes of audio (seconds)
 
 
 def _composite(tmp_path: Path) -> Path:

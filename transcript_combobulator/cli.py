@@ -17,7 +17,7 @@ COMMANDS = {
     "filter-vtt": "Rewrite a speaker's VTT from its saved JSON above a confidence",
     "compare": "Compare two combined transcripts of one session, per speaker",
     "session-env": "Write a session's env file from a recording bundle and a speakers file",
-    "setup-model": "Download WHISPER_MODEL into models/ without loading it",
+    "setup-model": "Download WHISPER_MODEL (or a named model) into models/ without loading it",
     "samples": "Build sample and test audio from samples/",
 }
 
