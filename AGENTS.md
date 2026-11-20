@@ -86,8 +86,9 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | Command | Purpose |
 |---------|---------|
 | `make check-deps` | Verify `uv` and `ffmpeg` on the host |
-| `make setup` | Check deps, `make install`, download whisper model |
+| `make setup` | Check deps, `make install`, download the whisper model and tiny (`setup-tiny`) |
 | `make install [EXTRAS=dev,mac]` | `uv sync --locked` with those extras into `.venv`, from `uv.lock` |
+| `make setup-tiny` | Download `tiny` (openai checkpoint, whatever `.env` says) into `models/`; the CI smoke test needs it |
 | `make setup-whisper` | Download `WHISPER_MODEL` into `models/` (checksum-verified, no model load); with `WHISPER_RUNTIME=mlx`, the pinned mlx checkpoint into `models/mlx/<model>/` |
 | `make run folder=path/ [force=1]` | Full parallel pipeline for one session; the only thing automation calls |
 | `make run-single file=path [force=1]` | Convert → VAD → transcribe one file, no combine |
@@ -98,8 +99,8 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make create-sample-files` | Populate `tmp/input/jfk-sample/` |
 | `make sample-ami` | Fetch the 4-speaker AMI sample into `tmp/input/ami-en2002b/` (network, checksum-verified) |
 | `make check-sample` | Transcribe the AMI sample; print WER against `samples/ami/EN2002b-human.txt` (no gate); fail if any word differs from `samples/ami/EN2002b-reference.txt` |
-| `make test-fast` | pytest as CI runs it: without the `slow` (large-model) tests; needs the tiny model (`WHISPER_MODEL=tiny make setup-whisper`) |
-| `make test` | The suite `scripts/check` runs, real inference included; never touches `tmp/output` |
+| `make test-fast` | pytest as CI runs it: without the `slow` (large-model) tests; needs `make setup-tiny` |
+| `make test` | The suite `scripts/check` runs: large-v3-turbo, tiny and VAD inference; needs `make setup` (both models); never touches `tmp/output` |
 | `make test-mlx` | Opt-in MLX inference test; needs `mlx_whisper` and the mlx checkpoint |
 | `make build` | `uv build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
@@ -343,9 +344,12 @@ fails loudly.
   threads across the active workers.
 - mlx-whisper is pinned in the `mac` extra (`mlx-whisper==0.4.3`; `pip check`
   is clean next to `torch==2.15.0`). `whisper_mlx.py` relies on its
-  `ModelHolder`, so a bump must keep `tests/test_whisper_runtime.py` green and
-  rerun the slow mlx test. CI does not run it: run `make test-mlx` before
-  merging a bump.
+  `ModelHolder`, so a bump can break it. `tests/test_whisper_runtime.py` runs
+  in CI against a stand-in and does not show that; the slow mlx test does.
+  Patch and minor updates of `mlx` and `mlx-whisper` merge with the rest once
+  CI passes, and CI cannot exercise them. The GPU path is opt-in and rarely
+  used, so nothing guards it: run `make test-mlx` before relying on it after
+  an update, and fix what it finds then.
 - `transcript_combobulator.whisper.load_whisper_model` loads by file path on purpose. Loading by
   name makes whisper sha256 the whole checkpoint per worker per run.
 - On macOS, `multiprocessing.set_start_method("spawn")` is mandatory for torch.
@@ -373,16 +377,16 @@ fails loudly.
   two small models: `tests/test_vad.py` and `tests/test_vad_streaming.py` run
   Silero VAD, which ships inside the `silero-vad` wheel, and
   `tests/test_whisper_tiny.py` transcribes the JFK clip with whisper `tiny`
-  and asserts keywords, not exact text. The tiny test needs `models/tiny.pt`:
-  CI downloads it (`WHISPER_MODEL=tiny combobulator setup-model`,
-  checksum-verified) and locally you run `WHISPER_MODEL=tiny make setup-whisper`
-  once (a `WHISPER_MODEL` set in your `.env` wins over the shell, so it would
-  download that model instead). Without the file the test fails and says so.
+  and asserts keywords, not exact text. It runs the openai runtime whatever
+  `.env` says, and checks the loaded model is tiny. It needs `models/tiny.pt`:
+  CI runs `combobulator setup-model tiny` (checksum-verified), and `make setup`
+  or `make setup-tiny` does the same locally. A model name given to
+  `setup-model` ignores `WHISPER_MODEL`, `WHISPER_RUNTIME` and `.env`. Without
+  the file the test fails and says so.
 - `tests/test_transcription.py` and `tests/test_whisper.py` are marked `slow`
   (real `large-v3-turbo` inference, about 20 s, needs `models/large-v3-turbo.pt`).
   `scripts/check` and `make test` run them; CI and `make test-fast` skip them.
-  The MLX test is marked `mlx` and runs only with `make test-mlx`. CI time for
-  the added tiny download and test is not measured until a pull request runs.
+  The MLX test is marked `mlx` and runs only with `make test-mlx`.
 - `make test` never cleans `tmp/output`. Slow tests write under
   `tmp/output/test_jfk*/`; `make clean-output` removes everything.
 - Whisper segment count is nondeterministic — use range assertions, not exact
@@ -402,7 +406,8 @@ fails loudly.
 - Dependabot patch and minor updates of `torch`, `torchaudio`, `onnxruntime`
   and `silero-vad` merge once CI passes. CI exercises Silero VAD and whisper
   `tiny` on the CPU, so it catches a broken install, a broken VAD or a broken
-  whisper load and decode. It does not run `large-v3-turbo` or MLX: a
+  whisper load and decode, on Linux x86_64 with the CPU wheels CI installs;
+  it does not cover macOS arm64 or aarch64. It does not run `large-v3-turbo` or MLX: a
   regression only those show (changed words, an MLX failure) is caught by the
   next local `scripts/check` (and `make test-mlx` on Apple Silicon), not before
   the merge. Run both before a release.

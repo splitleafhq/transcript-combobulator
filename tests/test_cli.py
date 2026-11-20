@@ -51,3 +51,34 @@ def test_help_does_not_import_torch() -> None:
         text=True,
     )
     assert probe.stdout.strip().endswith("False"), probe.stdout
+
+
+def test_setup_model_name_overrides_the_configured_model_and_runtime() -> None:
+    """A named model is fetched as the openai checkpoint even when .env says
+    otherwise. Regression: the name is ignored and .env's model (or its mlx
+    runtime) is fetched instead."""
+    from unittest.mock import patch
+
+    from transcript_combobulator import model_setup
+
+    with (
+        patch.object(model_setup, "WHISPER_MODEL", "large-v3-turbo"),
+        patch.object(model_setup, "WHISPER_RUNTIME", "mlx"),
+        patch.object(model_setup, "setup_whisper", return_value=True) as openai,
+        patch.object(model_setup, "setup_mlx_whisper") as mlx,
+    ):
+        model_setup.main(["tiny"])
+
+    openai.assert_called_once_with("tiny", model_setup.WHISPER_MODELS_DIR)
+    mlx.assert_not_called()
+
+
+def test_setup_model_name_failure_exits_nonzero() -> None:
+    from unittest.mock import patch
+
+    from transcript_combobulator import model_setup
+
+    with patch.object(model_setup, "setup_whisper", return_value=False):
+        with pytest.raises(SystemExit) as exc:
+            model_setup.main(["no-such-model"])
+    assert exc.value.code == 1

@@ -1,4 +1,4 @@
-.PHONY: help check-deps setup install setup-whisper run run-single \
+.PHONY: help check-deps setup install setup-whisper setup-tiny run run-single \
         combine-transcripts filter-vtt session-env compare-transcripts create-sample-files sample-ami check-sample test test-fast build lint format typecheck \
         clean-output clean-tmp
 
@@ -23,9 +23,10 @@ help: ## Show this help
 	echo "Per-campaign config: ENV_FILE=.env.<campaign> make run folder=tmp/input/<session>"
 
 # ── Setup ──
-setup: check-deps ## Install [$(EXTRAS)] into .venv from uv.lock, download the whisper model
+setup: check-deps ## Install [$(EXTRAS)] into .venv from uv.lock, download the whisper model and tiny
 	$(MAKE) install
 	$(MAKE) setup-whisper
+	$(MAKE) setup-tiny
 
 # Verify host prerequisites without touching the venv. Recipes run under
 # /bin/sh, so keep this POSIX (no bashisms like `&>`).
@@ -47,6 +48,9 @@ install: ## Install the project into .venv from uv.lock (EXTRAS=dev or EXTRAS=de
 
 setup-whisper: ## Download WHISPER_MODEL into models/ without loading it
 	$(CLI) setup-model
+
+setup-tiny: ## Download the tiny model the CI smoke test uses (openai checkpoint, whatever .env says)
+	$(CLI) setup-model tiny
 
 # ── Pipeline ──
 run: ## Full session pipeline: folder=tmp/input/<session> [force=1]
@@ -114,13 +118,13 @@ check-sample: sample-ami ## Transcribe the AMI sample and fail if it differs fro
 	$(VENV_CMD) ENV_FILE="$$env_file" combobulator compare --ref samples/ami/EN2002b-reference.txt \
 		--hyp tmp/output/ami-en2002b/ami-en2002b-combined.txt --strict
 
-test: ## Run the suite scripts/check runs, including real whisper/VAD inference
+test: ## Run the suite scripts/check runs: large-v3-turbo, tiny and VAD inference (needs setup-whisper and setup-tiny)
 	$(VENV_CMD) python -m pytest tests/ -v -m "not mlx"
 
 test-mlx: ## Run the opt-in MLX inference test (needs the mlx checkpoint)
 	$(VENV_CMD) python -m pytest tests/ -v -m mlx
 
-test-fast: ## Run the suite without the slow inference tests
+test-fast: ## Run the suite as CI does: no large-model tests; tiny and VAD inference (needs setup-tiny)
 	$(VENV_CMD) python -m pytest tests/ -v -m "not slow and not mlx"
 
 build: ## Build the sdist and wheel into dist/, as CI does

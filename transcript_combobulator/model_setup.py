@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Download the configured whisper model into models/ without loading it.
+A model name argument fetches that openai checkpoint instead (tests use tiny).
 
 whisper.load_model would also instantiate the fp32 model (about 3x the file
 size in RAM); on a Pi that is most of the memory for a step that only needs
@@ -80,7 +81,17 @@ def main(argv: list[str] | None = None) -> None:
         prog="combobulator setup-model",
         description="Download WHISPER_MODEL into models/ without loading it (checksum-verified).",
     )
-    parser.parse_args(argv)
+    parser.add_argument(
+        "model",
+        nargs="?",
+        help="Model to fetch instead of WHISPER_MODEL; always the openai (torch) checkpoint",
+    )
+    opts = parser.parse_args(argv)
+    if opts.model:
+        # A named model ignores WHISPER_MODEL and WHISPER_RUNTIME (and .env's).
+        if not setup_whisper(opts.model, WHISPER_MODELS_DIR):
+            sys.exit(1)
+        return
     if not WHISPER_MODEL:
         print("Error: WHISPER_MODEL is not set")
         sys.exit(1)
