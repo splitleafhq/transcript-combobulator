@@ -79,7 +79,7 @@ def setup_mlx_whisper(model_name: str, target_dir: Path) -> bool:
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(
         prog="combobulator setup-model",
-        description="Download WHISPER_MODEL into models/ without loading it (checksum-verified).",
+        description="Download WHISPER_MODEL, or the named model, into models/ without loading it (checksum-verified).",
     )
     parser.add_argument(
         "model",

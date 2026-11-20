@@ -403,14 +403,14 @@ fails loudly.
   `ffmpeg`, so `torchcodec` (ABI-locked to torch, no aarch64 wheel before
   0.11) is deliberately not a dependency. Do not reintroduce
   `torchaudio.load`/`save`.
-- Dependabot patch and minor updates of `torch`, `torchaudio`, `onnxruntime`
-  and `silero-vad` merge once CI passes. CI exercises Silero VAD and whisper
-  `tiny` on the CPU, so it catches a broken install, a broken VAD or a broken
-  whisper load and decode, on Linux x86_64 with the CPU wheels CI installs;
-  it does not cover macOS arm64 or aarch64. It does not run `large-v3-turbo` or MLX: a
-  regression only those show (changed words, an MLX failure) is caught by the
-  next local `scripts/check` (and `make test-mlx` on Apple Silicon), not before
-  the merge. Run both before a release.
+- Every Dependabot patch and minor update in the uv group merges once CI
+  passes. CI exercises Silero VAD and whisper `tiny` on the CPU, so it catches
+  a broken install, a broken VAD or a broken whisper load and decode, on
+  Linux x86_64 with the CPU wheels CI installs; it does not cover macOS arm64
+  or aarch64. It does not run `large-v3-turbo`: a regression only that model
+  shows (changed words) is caught by the next local `scripts/check`, not
+  before the merge. Run `scripts/check` before a release. The MLX path has
+  its own rule above.
 - `silero-vad` bundles both its models inside the wheel; `load_silero_vad()`
   needs no network access. It does not declare `onnxruntime`, which its
   ONNX build needs, so `pyproject.toml` pins it.
