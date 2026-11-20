@@ -5,12 +5,8 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-import pytest
-
 from transcript_combobulator.config import INPUT_DIR
 from transcript_combobulator.vad import load_vad_model, process_audio
-
-pytestmark = pytest.mark.slow  # real whisper/VAD inference
 
 
 def test_vad_model_loading():

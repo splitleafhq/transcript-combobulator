@@ -86,8 +86,9 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | Command | Purpose |
 |---------|---------|
 | `make check-deps` | Verify `uv` and `ffmpeg` on the host |
-| `make setup` | Check deps, `make install`, download whisper model |
+| `make setup` | Check deps, `make install`, download the whisper model and tiny (`setup-tiny`) |
 | `make install [EXTRAS=dev,mac]` | `uv sync --locked` with those extras into `.venv`, from `uv.lock` |
+| `make setup-tiny` | Download `tiny` (openai checkpoint, whatever `.env` says) into `models/`; the CI smoke test needs it |
 | `make setup-whisper` | Download `WHISPER_MODEL` into `models/` (checksum-verified, no model load); with `WHISPER_RUNTIME=mlx`, the pinned mlx checkpoint into `models/mlx/<model>/` |
 | `make run folder=path/ [force=1]` | Full parallel pipeline for one session; the only thing automation calls |
 | `make run-single file=path [force=1]` | Convert → VAD → transcribe one file, no combine |
@@ -98,8 +99,8 @@ Always use the Makefile. `make help` lists every target; this is the full set:
 | `make create-sample-files` | Populate `tmp/input/jfk-sample/` |
 | `make sample-ami` | Fetch the 4-speaker AMI sample into `tmp/input/ami-en2002b/` (network, checksum-verified) |
 | `make check-sample` | Transcribe the AMI sample; print WER against `samples/ami/EN2002b-human.txt` (no gate); fail if any word differs from `samples/ami/EN2002b-reference.txt` |
-| `make test-fast` | pytest without the `slow` (real inference) tests |
-| `make test` | The suite `scripts/check` runs, real inference included; never touches `tmp/output` |
+| `make test-fast` | pytest as CI runs it: without the `slow` (large-model) tests; needs `make setup-tiny` |
+| `make test` | The suite `scripts/check` runs: large-v3-turbo, tiny and VAD inference; needs `make setup` (both models); never touches `tmp/output` |
 | `make test-mlx` | Opt-in MLX inference test; needs `mlx_whisper` and the mlx checkpoint |
 | `make build` | `uv build` into `dist/`, as CI does |
 | `make lint` | `ruff check` and `ruff format --check` |
@@ -343,8 +344,12 @@ fails loudly.
   threads across the active workers.
 - mlx-whisper is pinned in the `mac` extra (`mlx-whisper==0.4.3`; `pip check`
   is clean next to `torch==2.15.0`). `whisper_mlx.py` relies on its
-  `ModelHolder`, so a bump must keep `tests/test_whisper_runtime.py` green and
-  rerun the slow mlx test.
+  `ModelHolder`, so a bump can break it. `tests/test_whisper_runtime.py` runs
+  in CI against a stand-in and does not show that; the slow mlx test does.
+  Patch and minor updates of `mlx` and `mlx-whisper` merge with the rest once
+  CI passes, and CI cannot exercise them. The GPU path is opt-in and rarely
+  used, so nothing guards it: run `make test-mlx` before relying on it after
+  an update, and fix what it finds then.
 - `transcript_combobulator.whisper.load_whisper_model` loads by file path on purpose. Loading by
   name makes whisper sha256 the whole checkpoint per worker per run.
 - On macOS, `multiprocessing.set_start_method("spawn")` is mandatory for torch.
@@ -368,10 +373,20 @@ fails loudly.
 - `tests/test_batch.py` is fast (mocks + dir fixtures). Safe to run on every
   change.
 - `tests/test_combine.py` is fast (pure Python over synthetic VTTs).
-- `tests/test_vad.py`, `tests/test_transcription.py`, `tests/test_whisper.py`
-  are marked `slow` (real inference, about 20 s). `scripts/check` and `make test`
-  run them; CI and `make test-fast` skip them (no models there). The MLX test is
-  marked `mlx` and runs only with `make test-mlx`.
+- CI runs everything except `slow` and `mlx`. That includes real inference on
+  two small models: `tests/test_vad.py` and `tests/test_vad_streaming.py` run
+  Silero VAD, which ships inside the `silero-vad` wheel, and
+  `tests/test_whisper_tiny.py` transcribes the JFK clip with whisper `tiny`
+  and asserts keywords, not exact text. It runs the openai runtime whatever
+  `.env` says, and checks the loaded model is tiny. It needs `models/tiny.pt`:
+  CI runs `combobulator setup-model tiny` (checksum-verified), and `make setup`
+  or `make setup-tiny` does the same locally. A model name given to
+  `setup-model` ignores `WHISPER_MODEL`, `WHISPER_RUNTIME` and `.env`. Without
+  the file the test fails and says so.
+- `tests/test_transcription.py` and `tests/test_whisper.py` are marked `slow`
+  (real `large-v3-turbo` inference, about 20 s, needs `models/large-v3-turbo.pt`).
+  `scripts/check` and `make test` run them; CI and `make test-fast` skip them.
+  The MLX test is marked `mlx` and runs only with `make test-mlx`.
 - `make test` never cleans `tmp/output`. Slow tests write under
   `tmp/output/test_jfk*/`; `make clean-output` removes everything.
 - Whisper segment count is nondeterministic — use range assertions, not exact
@@ -388,12 +403,20 @@ fails loudly.
   `ffmpeg`, so `torchcodec` (ABI-locked to torch, no aarch64 wheel before
   0.11) is deliberately not a dependency. Do not reintroduce
   `torchaudio.load`/`save`.
+- Every Dependabot patch and minor update in the uv group merges once CI
+  passes. CI exercises Silero VAD and whisper `tiny` on the CPU, so it catches
+  a broken install, a broken VAD or a broken whisper load and decode, on
+  Linux x86_64 with the CPU wheels CI installs; it does not cover macOS arm64
+  or aarch64. It does not run `large-v3-turbo`: a regression only that model
+  shows (changed words) is caught by the next local `scripts/check`, not
+  before the merge. Run `scripts/check` before a release. The MLX path has
+  its own rule above.
 - `silero-vad` bundles both its models inside the wheel; `load_silero_vad()`
   needs no network access. It does not declare `onnxruntime`, which its
   ONNX build needs, so `pyproject.toml` pins it.
 - `transcript_combobulator.vad._speech_regions_from_probs` is a verbatim port of silero's region
   logic because silero only accepts a whole-file tensor. Bumping `silero-vad`
-  must keep `tests/test_vad_streaming.py` green; if silero changes the
+  must keep `tests/test_vad_streaming.py` green (CI runs it); if silero changes the
   algorithm, port the change, do not paper over the diff.
 - `ffmpeg` must be on `PATH`, and its `ffprobe`: libsndfile cannot read
   `.m4a` or `.aac`, so conversion and the timing report take their duration
@@ -423,7 +446,7 @@ fails loudly.
    extend one that already covers it. Use synthetic fixtures where possible, and
    the slow whisper tests only when testing whisper behavior.
 6. Run `make lint`, `make typecheck` and `make test` before declaring done.
-   `scripts/check` runs CI's steps (ruff, pyrefly, tests, build) plus the slow real-inference tests CI can't run (it has no models) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
+   `scripts/check` runs CI's steps (ruff, pyrefly, tests, build) plus the `slow` large-model tests CI doesn't run (it has no large model) and fails when `.venv` is missing or off the pyproject pins; `.githooks/pre-push` runs it before every push. Enable the hook once per clone with `git config core.hooksPath .githooks`. A new worktree has no `.venv`: `python3.14 -m venv .venv && make install` (the Python in `.python-version`).
 
 ## Common Pitfalls
 
