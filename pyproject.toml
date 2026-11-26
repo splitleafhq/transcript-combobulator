@@ -20,7 +20,7 @@ dependencies = [
     "soundfile==0.14.0",
     "torch==2.15.0",
     "torchaudio==2.11.1",
-    "silero-vad==6.2.3",
+    "silero-vad==6.3",
     # silero-vad does not declare onnxruntime; its ONNX build needs it.
     "onnxruntime==1.32.0",
     "rich==15.0.0",
@@ -39,9 +39,9 @@ classifiers = [
 
 [project.optional-dependencies]
 dev = [
-    "pyrefly==1.4.1",
+    "pyrefly==1.5.0",
     "pytest==9.2.0",
-    "ruff==0.17.5",
+    "ruff==0.17.6",
 ]
 # Apple Silicon only; used when WHISPER_RUNTIME=mlx (the Apple GPU instead of the CPU).
 mac = [
